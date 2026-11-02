@@ -1,0 +1,1 @@
+ALTER TABLE `chords` ADD `image_url` text;
