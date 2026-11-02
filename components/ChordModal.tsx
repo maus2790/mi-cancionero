@@ -7,6 +7,7 @@ import { GuitarChordDiagram } from './GuitarChordDiagram';
 import { PianoChordDiagram } from './PianoChordDiagram';
 import { deleteChord } from '@/app/actions/chords';
 import { getChordDisplayName } from '@/lib/constants';
+import { useChordNotation } from '@/lib/ChordNotationContext';
 
 interface ChordModalProps {
     chord: any;
@@ -23,6 +24,7 @@ interface ChordModalProps {
 
 export default function ChordModal({ chord, chordName, isOpen, onClose, onDelete, initialView = 'guitar', allowToggle = false, canCreate = false, canManage = false, onEdit }: ChordModalProps) {
     const router = useRouter();
+    const { notation, formatChord } = useChordNotation();
     const [showImage, setShowImage] = useState(false);
     const [imageError, setImageError] = useState(false);
     const [viewMode, setViewMode] = useState<'guitar' | 'piano'>(initialView);
@@ -46,10 +48,10 @@ export default function ChordModal({ chord, chordName, isOpen, onClose, onDelete
                         <X className="w-6 h-6 text-app-muted" />
                     </button>
                     <h2 className="text-3xl font-bold text-app text-center mb-2">
-                        {chordName}
+                        {formatChord(chordName || '')}
                     </h2>
                     <p className="text-center text-app-muted mb-6">
-                        El acorde <strong className="text-app">{chordName}</strong> no existe en la base de datos.
+                        El acorde <strong className="text-app">{formatChord(chordName || '')}</strong> no existe en la base de datos.
                     </p>
                     {canCreate && <div className="flex justify-center">
                         <button
@@ -139,9 +141,14 @@ export default function ChordModal({ chord, chordName, isOpen, onClose, onDelete
                     </div>
                 )}
 
-                <h2 className="text-3xl font-bold text-app text-center mb-4 mt-2">
-                    {getChordDisplayName(chord.root, chord.type, chord.name)}
+                <h2 className="text-3xl font-bold text-app text-center mb-1 mt-2">
+                    {getChordDisplayName(chord.root, chord.type, chord.name, notation)}
                 </h2>
+                {notation === 'latin' && (
+                    <p className="text-xs text-app-muted text-center mb-3">
+                        Cifrado anglosajón: <span className="font-mono font-bold text-app">{chord.name}</span>
+                    </p>
+                )}
 
                 <div className="flex justify-center mb-6">
                     {viewMode === 'guitar' ? (

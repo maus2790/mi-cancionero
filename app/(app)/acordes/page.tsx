@@ -15,9 +15,11 @@ import { getChordDisplayName, NOTE_OPTIONS, normalizeNote } from '@/lib/constant
 import { useNetworkStatus } from '@/lib/hooks/useNetworkStatus';
 import { useOfflineMode } from '@/lib/hooks/useOfflineMode';
 import { getOfflineChords } from '@/lib/offline-db';
+import { useChordNotation } from '@/lib/ChordNotationContext';
 
 export default function ChordsPage() {
   const { setTitle, setShowBack } = useTitle();
+  const { notation } = useChordNotation();
   const router = useRouter();
   useEffect(() => {
       setTitle('Banco de Acordes');
@@ -248,7 +250,7 @@ export default function ChordsPage() {
                 onClick={() => handleChordClick(chord)}
               >
                 <span className="text-lg font-bold text-app mb-2">
-                  {getChordDisplayName(chord.root, chord.type, chord.name)}
+                  {getChordDisplayName(chord.root, chord.type, chord.name, notation)}
                 </span>
                 <div className="w-full flex justify-center pointer-events-none">
                   {view === 'guitar' ? (

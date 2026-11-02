@@ -1,3 +1,5 @@
+import { formatChord, type ChordNotation } from '@/lib/chords';
+
 // Notas musicales
 export const NOTE_OPTIONS = [
     { value: 'C', label: 'C' },
@@ -21,10 +23,20 @@ const FLAT_NOTES: Record<string, string> = { 'C#': 'Db', 'D#': 'Eb', 'F#': 'Gb',
 
 export const normalizeNote = (note: string) => ENHARMONIC_NOTES[note] || note;
 
-export const getChordDisplayName = (root: string | null | undefined, type: string | null | undefined, fallback = '') => {
+export const getChordDisplayName = (
+    root: string | null | undefined,
+    type: string | null | undefined,
+    fallback = '',
+    notation: ChordNotation = 'anglosaxon'
+) => {
     const canonicalRoot = normalizeNote(root || fallback.charAt(0));
     const suffix = type && type !== 'major' ? type : '';
     const flat = FLAT_NOTES[canonicalRoot];
+    if (notation === 'latin') {
+        const latinRoot = formatChord(canonicalRoot, 'latin');
+        const latinFlat = flat ? formatChord(flat, 'latin') : null;
+        return latinFlat ? `${latinRoot}${suffix} / ${latinFlat}${suffix}` : `${latinRoot}${suffix}`;
+    }
     return flat ? `${canonicalRoot}${suffix} / ${flat}${suffix}` : `${canonicalRoot}${suffix}`;
 };
 

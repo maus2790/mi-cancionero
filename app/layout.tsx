@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google';
 import './globals.css';
 import { ThemeProvider } from '@/lib/ThemeProvider';
 import { TitleProvider } from '@/lib/TitleContext';
+import { ChordNotationProvider } from '@/lib/ChordNotationContext';
 import { Toaster } from 'react-hot-toast';
 import { PwaServiceWorker } from '@/components/PwaServiceWorker';
 
@@ -35,9 +36,11 @@ export default function RootLayout({
     <html lang="es" suppressHydrationWarning>
       <body className={inter.className}>
         <ThemeProvider>
-          <TitleProvider>
-            {children}
-          </TitleProvider>
+          <ChordNotationProvider>
+            <TitleProvider>
+              {children}
+            </TitleProvider>
+          </ChordNotationProvider>
           <Toaster position="top-right" toastOptions={{ duration: 3500 }} />
           <PwaServiceWorker />
         </ThemeProvider>

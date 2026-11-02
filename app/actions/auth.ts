@@ -151,6 +151,7 @@ export async function getCurrentUser() {
                 role: users.role,
                 provider: users.provider,
                 avatarUrl: users.avatarUrl,
+                preferences: users.preferences,
                 createdAt: users.createdAt,
             })
             .from(users)
@@ -165,6 +166,7 @@ export async function getCurrentUser() {
             role: user.role || 'user',
             provider: user.provider,
             avatarUrl: user.avatarUrl,
+            preferences: user.preferences,
             createdAt: user.createdAt,
         };
     } catch (error) {
@@ -353,6 +355,38 @@ export async function removeAvatar() {
     revalidatePath('/perfil');
     return { success: true };
 }
+
+// ============================================================
+// ACTUALIZAR PREFERENCIAS DEL USUARIO (Notación de acordes, etc.)
+// ============================================================
+export async function updateUserPreferences(preferences: Record<string, any>) {
+    const user = await getCurrentUser();
+    if (!user) return null;
+
+    try {
+        const [dbUser] = await db.select({ preferences: users.preferences }).from(users).where(eq(users.id, user.id));
+        let currentPrefs: Record<string, any> = {};
+        try {
+            currentPrefs = dbUser?.preferences ? JSON.parse(dbUser.preferences) : {};
+        } catch {
+            currentPrefs = {};
+        }
+
+        const merged = { ...currentPrefs, ...preferences };
+        const serialized = JSON.stringify(merged);
+
+        await db.update(users)
+            .set({ preferences: serialized })
+            .where(eq(users.id, user.id));
+
+        revalidatePath('/perfil');
+        return merged;
+    } catch (e) {
+        console.warn('Could not persist preferences to database:', e);
+        return null;
+    }
+}
+
 
 
 

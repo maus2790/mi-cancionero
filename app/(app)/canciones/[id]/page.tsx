@@ -8,15 +8,24 @@ import { getUserSetlists } from '@/app/actions/setlists';
 import { AddToSetlistModal } from '@/components/AddToSetlistModal';
 import ChordModal from '@/components/ChordModal';
 import { transposeChordPro } from '@/lib/chords';
-import { Heart, Trash2, Edit, ListPlus, Type, ChevronLeft, ChevronRight, Play, Pause, Maximize2, Minimize2, Gauge, Square, MoreHorizontal, Video, Loader2 } from 'lucide-react';
+import {
+    Heart, Trash2, Edit, ListPlus, Type, ChevronLeft, ChevronRight,
+    Play, Pause, Maximize2, Minimize2, Square, MoreVertical,
+    Video, Loader2, Radio, SlidersHorizontal, ArrowDown, Scissors, Music2
+} from 'lucide-react';
 import { getCurrentUser } from '@/app/actions/auth';
 import { useTitle } from '@/lib/TitleContext';
 import { useAudioCleanup } from '@/hooks/useAudioCleanup';
 import toast from 'react-hot-toast';
 import { canCreateContent, canManageContent, type ContentUser } from '@/lib/permissions';
 import { useNetworkStatus } from '@/lib/hooks/useNetworkStatus';
-import { useOfflineMode } from '@/lib/hooks/useOfflineMode';
 import { getOfflineSongById, getOfflineSetlists } from '@/lib/offline-db';
+import { useChordNotation } from '@/lib/ChordNotationContext';
+import { Metronome } from '@/components/Metronome';
+import { AutoScrollController } from '@/components/AutoScrollController';
+import { CapoCalculatorModal } from '@/components/CapoCalculatorModal';
+import { SongSettingsModal } from '@/components/SongSettingsModal';
+import { NOTES, normalizeNote } from '@/lib/constants';
 
 const FONT_SIZES = ['small', 'medium', 'large', 'xlarge'] as const;
 type FontSize = typeof FONT_SIZES[number];
@@ -35,10 +44,20 @@ const FONT_SIZE_LABELS: Record<FontSize, string> = {
     xlarge: 'XL',
 };
 
+const CHORD_COLOR_CLASSES: Record<string, string> = {
+    cyan: 'text-[var(--color-primary)]',
+    amber: 'text-amber-500 dark:text-amber-400',
+    emerald: 'text-emerald-500 dark:text-emerald-400',
+    violet: 'text-violet-500 dark:text-violet-400',
+    rose: 'text-rose-500 dark:text-rose-400',
+    blue: 'text-blue-500 dark:text-blue-400',
+};
+
 export default function SongDetailPage() {
     const { id } = useParams();
     const router = useRouter();
     const { setTitle, setShowBack, setOnBack, setHeaderRight } = useTitle();
+    const { formatChordPro, formatKey, toCanonicalAngloChord } = useChordNotation();
     const [song, setSong] = useState<any>(null);
     const [loading, setLoading] = useState(true);
 
@@ -47,6 +66,16 @@ export default function SongDetailPage() {
     const [isFavorite, setIsFavorite] = useState(false);
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [currentUser, setCurrentUser] = useState<ContentUser | null>(null);
+
+    // Nuevas funcionalidades avanzadas
+    const [isMetronomeOpen, setIsMetronomeOpen] = useState(false);
+    const [isCapoOpen, setIsCapoOpen] = useState(false);
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const [showAutoScroll, setShowAutoScroll] = useState(false);
+    const [showMobileToolbarMenu, setShowMobileToolbarMenu] = useState(false);
+    const [hideChords, setHideChords] = useState(false);
+    const [columns, setColumns] = useState<1 | 2>(1);
+    const [chordColor, setChordColor] = useState('cyan');
 
     const [selectedChord, setSelectedChord] = useState<any>(null);
     const [selectedChordName, setSelectedChordName] = useState<string>('');
@@ -72,10 +101,15 @@ export default function SongDetailPage() {
     const containerRef = useRef<HTMLDivElement>(null);
     useAudioCleanup(audioRef);
     const { isOnline } = useNetworkStatus();
-    const { isSectionOffline } = useOfflineMode();
 
     const fontSize = FONT_SIZES[fontSizeIndex];
     const fontSizeClass = FONT_SIZE_CLASSES[fontSize];
+
+    const songBpm = (() => {
+        if (!song?.content) return 100;
+        const match = song.content.match(/\{(?:tempo|bpm):\s*(\d+)\}/i);
+        return match ? parseInt(match[1], 10) : 100;
+    })();
 
     useEffect(() => {
         const loadData = async () => {
@@ -114,7 +148,7 @@ export default function SongDetailPage() {
     useEffect(() => {
         if (isAuthenticated) {
             const loadSetlists = async () => {
-                if (!isOnline && isSectionOffline('setlists')) {
+                if (!isOnline) {
                     const lists = await getOfflineSetlists();
                     setUserSetlists(lists);
                     return;
@@ -139,7 +173,7 @@ export default function SongDetailPage() {
         };
     }, [song, setTitle, setShowBack, setOnBack, setHeaderRight, router]);
 
-    const handleHeaderPlayer = () => {
+    const handleHeaderPlayer = useCallback(() => {
         const audio = audioRef.current;
         if (!audio) return;
 
@@ -154,7 +188,7 @@ export default function SongDetailPage() {
         setIsPlayerOpen(true);
         setIsBuffering(true);
         audio.play().catch(() => setIsBuffering(false));
-    };
+    }, [isPlayerOpen]);
 
     const handleBarPlayPause = () => {
         const audio = audioRef.current;
@@ -188,7 +222,7 @@ export default function SongDetailPage() {
         } else {
             setHeaderRight(null);
         }
-    }, [song, isPlayerOpen, isBuffering, setHeaderRight]);
+    }, [song, isPlayerOpen, isBuffering, setHeaderRight, handleHeaderPlayer]);
 
     const makeVisible = useCallback(() => {
         setIsVisible(true);
@@ -197,7 +231,7 @@ export default function SongDetailPage() {
             if (!isHovering) {
                 setIsVisible(false);
             }
-        }, 10000);
+        }, 12000);
     }, [isHovering]);
 
     const handleMouseEnter = () => {
@@ -214,7 +248,7 @@ export default function SongDetailPage() {
         if (timeoutRef.current) clearTimeout(timeoutRef.current);
         timeoutRef.current = setTimeout(() => {
             setIsVisible(false);
-        }, 10000);
+        }, 12000);
     };
 
     useEffect(() => {
@@ -279,7 +313,7 @@ export default function SongDetailPage() {
     };
 
     const togglePlaybackRate = () => {
-        const rate = playbackRate === 1 ? 0.5 : 1;
+        const rate = playbackRate === 1 ? 0.75 : playbackRate === 0.75 ? 0.5 : 1;
         if (audioRef.current) {
             audioRef.current.playbackRate = rate;
             setPlaybackRate(rate);
@@ -309,11 +343,12 @@ export default function SongDetailPage() {
 
     const handleChordClick = async (fullChord: string) => {
         const baseChord = fullChord.split('/')[0];
+        const canonicalAnglo = toCanonicalAngloChord(baseChord);
         setSelectedChordName(baseChord);
         setSelectedChord(null);
         setIsChordModalOpen(true);
         try {
-            const chordData = await getChordByNameExact(baseChord);
+            const chordData = await getChordByNameExact(canonicalAnglo);
             setSelectedChord(chordData);
         } catch (error) {
             console.error('Error fetching chord:', error);
@@ -333,6 +368,16 @@ export default function SongDetailPage() {
         }
     };
 
+    // Calcular la tonalidad actual transpuesta
+    const currentTransposedKey = (() => {
+        if (!song?.key) return '';
+        const root = normalizeNote(song.key);
+        const idx = NOTES.indexOf(root as any);
+        if (idx === -1) return formatKey(song.key);
+        const newIdx = (idx + transpose + 120) % 12;
+        return formatKey(NOTES[newIdx]);
+    })();
+
     if (loading) {
         return (
             <div className="flex justify-center items-center h-screen">
@@ -349,12 +394,24 @@ export default function SongDetailPage() {
         );
     }
 
-    const transposedContent = transpose !== 0 ? transposeChordPro(song.content, transpose) : song.content;
-    const controlsOpacity = (isVisible || isHovering) ? 'opacity-100' : 'opacity-40';
+    const rawTransposed = transpose !== 0 ? transposeChordPro(song.content, transpose) : song.content;
+    const transposedContent = formatChordPro(rawTransposed);
+    const controlsOpacity = (isVisible || isHovering) ? 'opacity-100' : 'opacity-40 hover:opacity-100';
     const canManageSong = canManageContent(currentUser, song.userId, song.isPublic ?? false);
+    const chordColorClass = CHORD_COLOR_CLASSES[chordColor] || 'text-[var(--color-primary)]';
 
     return (
-        <div ref={containerRef} className="bg-app">
+        <div ref={containerRef} className="bg-app min-h-screen">
+
+            {/* Cabecera exclusiva para impresión */}
+            <div className="hidden print:block mb-6 border-b pb-4">
+                <h1 className="text-3xl font-bold text-black">{song.title}</h1>
+                <div className="text-sm text-gray-700 mt-1 flex gap-4">
+                    {song.artist && <span><strong>Artista:</strong> {song.artist}</span>}
+                    {currentTransposedKey && <span><strong>Tono:</strong> {currentTransposedKey}</span>}
+                    {song.style && <span><strong>Estilo:</strong> {song.style}</span>}
+                </div>
+            </div>
 
             {song.audioUrl && (
                 <audio
@@ -374,7 +431,7 @@ export default function SongDetailPage() {
 
             {/* Reproductor sticky */}
             {song.audioUrl && isPlayerOpen && (
-                <div className="sticky top-0 z-40 app-glass border-b px-2 sm:px-4 py-2 sm:py-3 flex flex-row items-center gap-2 sm:gap-4 shadow-sm">
+                <div className="sticky top-0 z-40 app-glass border-b px-2 sm:px-4 py-2 sm:py-3 flex flex-row items-center gap-2 sm:gap-4 shadow-sm print:hidden">
                     <div className="flex items-center gap-2 flex-1 min-w-0">
                         <span className="text-[10px] sm:text-xs text-app-muted font-mono w-8 sm:w-10 text-right shrink-0">
                             {Math.floor(currentTime / 60)}:{(Math.floor(currentTime % 60)).toString().padStart(2, '0')}
@@ -409,11 +466,10 @@ export default function SongDetailPage() {
                         </button>
                         <button
                             onClick={togglePlaybackRate}
-                            className={`p-2 rounded-md transition ${playbackRate === 0.5 ? 'bg-[var(--color-primary)] text-white' : 'bg-[var(--color-border)] text-app hover:opacity-80'}`}
-                            aria-label={playbackRate === 1 ? 'Cambiar velocidad a 0.5' : 'Cambiar velocidad a 1'}
-                            title={playbackRate === 1 ? 'Velocidad 0.5' : 'Velocidad 1'}
+                            className={`px-2 py-1.5 rounded-md text-xs font-mono font-bold transition ${playbackRate !== 1 ? 'bg-[var(--color-primary)] text-white' : 'bg-[var(--color-border)] text-app hover:opacity-80'}`}
+                            title="Cambiar velocidad de reproducción"
                         >
-                            <Gauge className="w-4 h-4" />
+                            {playbackRate}x
                         </button>
                     </div>
                 </div>
@@ -421,7 +477,7 @@ export default function SongDetailPage() {
 
             {/* Banner edición de posición de notas */}
             {isEditingChordPositions && (
-                <div className="sticky top-0 z-40 flex flex-wrap items-center justify-between gap-3 border-b border-blue-200 bg-blue-50 px-4 py-3 text-sm dark:border-blue-900 dark:bg-blue-950/50">
+                <div className="sticky top-0 z-40 flex flex-wrap items-center justify-between gap-3 border-b border-blue-200 bg-blue-50 px-4 py-3 text-sm dark:border-blue-900 dark:bg-blue-950/50 print:hidden">
                     <span className="font-medium text-blue-800 dark:text-blue-200">Arrastra las notas con el cursor de mano y guarda los cambios.</span>
                     <div className="flex gap-2">
                         <button onClick={() => setIsEditingChordPositions(false)} disabled={savingChordPositions} className="rounded-lg px-3 py-1.5 text-app hover:bg-[var(--color-border)]">Cancelar</button>
@@ -430,71 +486,314 @@ export default function SongDetailPage() {
                 </div>
             )}
 
-            {/* Contenido de la canción */}
-            <div className="min-h-screen overflow-x-auto p-4 sm:p-8">
-                <div className={`mx-auto min-w-max max-w-none whitespace-pre ${fontSizeClass} text-app leading-relaxed pb-32`}>
-                    {transposedContent.split('\n').map((line: string, i: number) => {
-                        const parts = line.split(/(\[[^\]]+\])/g);
-                        return (
-                            <div key={i} className="leading-relaxed">
-                                {parts.map((part: string, j: number) => {
-                                    if (part.startsWith('[') && part.endsWith(']')) {
-                                        const fullChord = part.slice(1, -1);
-                                        const chordKey = `${i}-${j}`;
-                                        return (
-                                            <button
-                                                key={j}
-                                                onClick={() => !isEditingChordPositions && handleChordClick(fullChord)}
-                                                onPointerDown={(event) => {
-                                                    if (!isEditingChordPositions) return;
-                                                    event.currentTarget.setPointerCapture(event.pointerId);
-                                                    setDragStart({ key: chordKey, clientX: event.clientX, offset: chordOffsets[chordKey] || 0 });
-                                                }}
-                                                onPointerMove={(event) => {
-                                                    if (!dragStart || dragStart.key !== chordKey) return;
-                                                    setChordOffsets(current => ({ ...current, [chordKey]: Math.round(dragStart.offset + event.clientX - dragStart.clientX) }));
-                                                }}
-                                                onPointerUp={() => setDragStart(null)}
-                                                className={`inline-block text-left text-[var(--color-primary)] font-bold focus:outline-none ${isEditingChordPositions ? 'cursor-grab active:cursor-grabbing rounded bg-[var(--color-primary)]/10 px-0.5' : 'cursor-pointer hover:underline'}`}
-                                                style={{ transform: `translateX(${chordOffsets[chordKey] || 0}px)` }}
-                                            >
-                                                {fullChord}
-                                            </button>
-                                        );
-                                    }
-                                    return <span key={j}>{part}</span>;
-                                })}
-                            </div>
-                        );
-                    })}
+            {/* Barra de herramientas superior rápida (en pantalla) */}
+            <div className="max-w-6xl mx-auto px-4 pt-4 pb-2 print:hidden">
+                <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-2xl app-card border border-[var(--color-border)]">
+                    {/* Info Tonalidad y Artista */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                        {currentTransposedKey && (
+                            <span className="px-2.5 py-1 rounded-lg bg-[var(--color-primary)]/15 text-[var(--color-primary)] font-bold text-xs flex items-center gap-1.5 shadow-sm">
+                                <Music2 className="w-3.5 h-3.5" />
+                                Tono: {currentTransposedKey} {transpose !== 0 && `(${transpose > 0 ? '+' : ''}${transpose})`}
+                            </span>
+                        )}
+                        {song.artist && (
+                            <span className="text-xs font-medium text-app-muted truncate max-w-[180px]">
+                                {song.artist}
+                            </span>
+                        )}
+                        {song.style && (
+                            <span className="px-2 py-0.5 rounded-full bg-[var(--color-border)] text-app-muted text-[11px]">
+                                {song.style}
+                            </span>
+                        )}
+                    </div>
+
+                    {/* Botones de acción rápida: Solo visibles en escritorio (sm y superior) */}
+                    <div className="hidden sm:flex items-center gap-1.5">
+                        {/* Auto-Scroll Toggle */}
+                        <button
+                            onClick={() => setShowAutoScroll(s => !s)}
+                            className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition ${
+                                showAutoScroll
+                                    ? 'bg-[var(--color-primary)] text-white shadow-sm'
+                                    : 'hover:bg-[var(--color-border)] text-app'
+                            }`}
+                            title="Alternar barra de auto-scroll"
+                        >
+                            <ArrowDown className="w-3.5 h-3.5" />
+                            <span>Auto-Scroll</span>
+                        </button>
+
+                        {/* Metrónomo */}
+                        <button
+                            onClick={() => setIsMetronomeOpen(m => !m)}
+                            className={`p-2 rounded-xl transition flex items-center gap-1 text-xs font-medium ${
+                                isMetronomeOpen
+                                    ? 'bg-[var(--color-primary)] text-white shadow-sm'
+                                    : 'hover:bg-[var(--color-border)] text-app'
+                            }`}
+                            title={isMetronomeOpen ? "Detener metrónomo" : "Iniciar metrónomo"}
+                        >
+                            <Radio className={`w-4 h-4 ${isMetronomeOpen ? 'text-white animate-pulse' : 'text-[var(--color-primary)]'}`} />
+                            <span>Metrónomo</span>
+                        </button>
+
+                        {/* Cejilla / Capo */}
+                        <button
+                            onClick={() => setIsCapoOpen(true)}
+                            className="p-2 rounded-xl hover:bg-[var(--color-border)] text-app transition flex items-center gap-1 text-xs font-medium"
+                            title="Calculador de cejilla / capo"
+                        >
+                            <Scissors className="w-4 h-4 text-amber-500" />
+                            <span>Capo</span>
+                        </button>
+
+                        {/* Ajustes de lectura */}
+                        <button
+                            onClick={() => setIsSettingsOpen(true)}
+                            className="p-2 rounded-xl hover:bg-[var(--color-border)] text-app transition flex items-center gap-1 text-xs font-medium"
+                            title="Ajustes de visualización (color, modo letra, 2 columnas, imprimir)"
+                        >
+                            <SlidersHorizontal className="w-4 h-4" />
+                            <span>Ajustes</span>
+                        </button>
+                    </div>
+
+                    {/* EN MODO CELULAR: Las opciones de auto-scroll, metrónomo, capo y ajustes
+                        SOLO se muestran dentro de los tres puntitos verticales */}
+                    <div className="relative sm:hidden flex items-center">
+                        <button
+                            onClick={() => setShowMobileToolbarMenu(m => !m)}
+                            className={`p-2 rounded-xl border border-[var(--color-border)] text-app transition ${
+                                showMobileToolbarMenu || showAutoScroll || isMetronomeOpen
+                                    ? 'bg-[var(--color-primary)]/15 border-[var(--color-primary)] text-[var(--color-primary)]'
+                                    : 'hover:bg-[var(--color-border)]'
+                            }`}
+                            aria-label="Más opciones"
+                            aria-expanded={showMobileToolbarMenu}
+                            title="Más opciones"
+                        >
+                            <MoreVertical className="w-4 h-4" />
+                        </button>
+
+                        {showMobileToolbarMenu && (
+                            <>
+                                <div
+                                    className="fixed inset-0 z-40 bg-black/20"
+                                    onClick={() => setShowMobileToolbarMenu(false)}
+                                />
+                                <div className="absolute right-0 top-full mt-2 w-56 overflow-hidden rounded-2xl app-card shadow-2xl border border-[var(--color-border)] divide-y divide-[var(--color-border)] z-50">
+                                    <div className="p-1">
+                                        {/* Auto-Scroll */}
+                                        <button
+                                            onClick={() => {
+                                                setShowAutoScroll(s => !s);
+                                                setShowMobileToolbarMenu(false);
+                                            }}
+                                            className={`flex w-full items-center justify-between px-3 py-2.5 text-left text-xs font-medium rounded-xl transition ${
+                                                showAutoScroll
+                                                    ? 'bg-[var(--color-primary)]/15 text-[var(--color-primary)] font-bold'
+                                                    : 'text-app hover:bg-[var(--color-border)]'
+                                            }`}
+                                        >
+                                            <span className="flex items-center gap-2">
+                                                <ArrowDown className="w-4 h-4 text-[var(--color-primary)]" />
+                                                Auto-Scroll
+                                            </span>
+                                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--color-border)] font-mono">
+                                                {showAutoScroll ? 'On' : 'Off'}
+                                            </span>
+                                        </button>
+
+                                        {/* Metrónomo */}
+                                        <button
+                                            onClick={() => {
+                                                setIsMetronomeOpen(m => !m);
+                                                setShowMobileToolbarMenu(false);
+                                            }}
+                                            className={`flex w-full items-center justify-between px-3 py-2.5 text-left text-xs font-medium rounded-xl transition ${
+                                                isMetronomeOpen
+                                                    ? 'bg-[var(--color-primary)]/15 text-[var(--color-primary)] font-bold'
+                                                    : 'text-app hover:bg-[var(--color-border)]'
+                                            }`}
+                                        >
+                                            <span className="flex items-center gap-2">
+                                                <Radio className={`w-4 h-4 ${isMetronomeOpen ? 'text-[var(--color-primary)] animate-pulse' : 'text-purple-500'}`} />
+                                                Metrónomo
+                                            </span>
+                                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--color-border)] font-mono">
+                                                {isMetronomeOpen ? 'Sonando' : 'Off'}
+                                            </span>
+                                        </button>
+
+                                        {/* Capo */}
+                                        <button
+                                            onClick={() => {
+                                                setIsCapoOpen(true);
+                                                setShowMobileToolbarMenu(false);
+                                            }}
+                                            className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-medium text-app hover:bg-[var(--color-border)] rounded-xl transition"
+                                        >
+                                            <Scissors className="w-4 h-4 text-amber-500" />
+                                            Cejilla / Capo
+                                        </button>
+
+                                        {/* Ajustes */}
+                                        <button
+                                            onClick={() => {
+                                                setIsSettingsOpen(true);
+                                                setShowMobileToolbarMenu(false);
+                                            }}
+                                            className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-medium text-app hover:bg-[var(--color-border)] rounded-xl transition"
+                                        >
+                                            <SlidersHorizontal className="w-4 h-4 text-[var(--color-primary)]" />
+                                            Ajustes del visor
+                                        </button>
+                                    </div>
+
+                                    {(canCreateContent(currentUser) || song.videoUrl || canManageSong) && (
+                                        <div className="p-1">
+                                            {canCreateContent(currentUser) && (
+                                                <button
+                                                    onClick={() => {
+                                                        setShowMobileToolbarMenu(false);
+                                                        setIsEditingChordPositions(true);
+                                                    }}
+                                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-app hover:bg-[var(--color-border)] rounded-lg transition"
+                                                >
+                                                    Ajustar posición de notas
+                                                </button>
+                                            )}
+                                            {song.videoUrl && (
+                                                <button
+                                                    onClick={() => {
+                                                        setShowMobileToolbarMenu(false);
+                                                        window.open(song.videoUrl, '_blank');
+                                                    }}
+                                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-[var(--color-primary)] hover:bg-[var(--color-border)] rounded-lg transition"
+                                                >
+                                                    <Video className="w-4 h-4" /> Video de referencia
+                                                </button>
+                                            )}
+                                            {canManageSong && (
+                                                <>
+                                                    <button
+                                                        onClick={() => {
+                                                            setShowMobileToolbarMenu(false);
+                                                            router.push(`/canciones/${song.id}/editar`);
+                                                        }}
+                                                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-app hover:bg-[var(--color-border)] rounded-lg transition"
+                                                    >
+                                                        <Edit className="w-4 h-4" /> Editar canción
+                                                    </button>
+                                                    <button
+                                                        onClick={() => {
+                                                            setShowMobileToolbarMenu(false);
+                                                            handleDelete();
+                                                        }}
+                                                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg transition"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" /> Eliminar canción
+                                                    </button>
+                                                </>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            </>
+                        )}
+                    </div>
                 </div>
             </div>
 
-            {/* Controles flotantes a la derecha */}
+            {/* Contenido de la canción */}
+            <div className="max-w-6xl mx-auto px-4 sm:px-8 py-3 pb-36">
+                {/* Hoja de letra y acordes */}
+                <div className={`overflow-x-auto ${columns === 2 ? 'md:columns-2 md:gap-12 md:divide-x md:divide-[var(--color-border)]/40' : ''}`}>
+                    <div className={`whitespace-pre font-mono ${fontSizeClass} text-app leading-relaxed`}>
+                        {transposedContent.split('\n').map((line: string, i: number) => {
+                            const parts = line.split(/(\[[^\]]+\])/g);
+                            return (
+                                <div key={i} className="leading-relaxed hover:bg-[var(--color-border)]/10 rounded px-1 -mx-1 transition-colors">
+                                    {parts.map((part: string, j: number) => {
+                                        if (part.startsWith('[') && part.endsWith(']')) {
+                                            if (hideChords) return null; // Modo solo letra
+                                            const fullChord = part.slice(1, -1);
+                                            const chordKey = `${i}-${j}`;
+                                            return (
+                                                <button
+                                                    key={j}
+                                                    onClick={() => !isEditingChordPositions && handleChordClick(fullChord)}
+                                                    onPointerDown={(event) => {
+                                                        if (!isEditingChordPositions) return;
+                                                        event.currentTarget.setPointerCapture(event.pointerId);
+                                                        setDragStart({ key: chordKey, clientX: event.clientX, offset: chordOffsets[chordKey] || 0 });
+                                                    }}
+                                                    onPointerMove={(event) => {
+                                                        if (!dragStart || dragStart.key !== chordKey) return;
+                                                        setChordOffsets(current => ({ ...current, [chordKey]: Math.round(dragStart.offset + event.clientX - dragStart.clientX) }));
+                                                    }}
+                                                    onPointerUp={() => setDragStart(null)}
+                                                    className={`inline-block text-left ${chordColorClass} font-bold focus:outline-none print-chord ${
+                                                        isEditingChordPositions
+                                                            ? 'cursor-grab active:cursor-grabbing rounded bg-[var(--color-primary)]/10 px-0.5'
+                                                            : 'cursor-pointer hover:underline'
+                                                    }`}
+                                                    style={{ transform: `translateX(${chordOffsets[chordKey] || 0}px)` }}
+                                                    title={`Ver acorde ${fullChord}`}
+                                                >
+                                                    {fullChord}
+                                                </button>
+                                            );
+                                        }
+                                        return <span key={j} className="print-readable">{part}</span>;
+                                    })}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            </div>
+
+            {/* Widget flotante de Auto-Scroll */}
+            {showAutoScroll && (
+                <div className="print:hidden">
+                    <AutoScrollController
+                        scrollContainerId="main-scroll-container"
+                        onClose={() => setShowAutoScroll(false)}
+                    />
+                </div>
+            )}
+
+            {/* Controles flotantes a la derecha (Performance Dock) */}
             <div
-                className={`fixed right-3 sm:right-6 bottom-20 sm:bottom-8 flex flex-col items-center gap-2 transition-all duration-300 ${controlsOpacity} z-50`}
+                className={`fixed right-3 sm:right-6 bottom-20 sm:bottom-8 flex flex-col items-center gap-2 transition-all duration-300 ${controlsOpacity} z-40 print:hidden`}
                 onMouseEnter={handleMouseEnter}
                 onMouseLeave={handleMouseLeave}
             >
+                {/* Pantalla completa / Modo escenario */}
                 <button
                     onClick={toggleFullscreen}
                     className="flex flex-col items-center gap-0.5 group"
                     aria-label="Pantalla completa"
+                    title={isFullscreen ? 'Salir de pantalla completa' : 'Modo Escenario (Pantalla completa)'}
                 >
-                    <div className="p-1.5 rounded-full app-glass shadow-lg text-app-muted hover:text-[var(--color-primary)] transition">
+                    <div className="p-2 rounded-full app-glass shadow-lg text-app-muted group-hover:text-[var(--color-primary)] transition">
                         {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
                     </div>
                     <span className="text-[9px] text-app-muted">
-                        {isFullscreen ? 'Salir' : 'Pantalla'}
+                        {isFullscreen ? 'Salir' : 'Escenario'}
                     </span>
                 </button>
 
+                {/* Favorito */}
                 <button
                     onClick={handleToggleFavorite}
                     className="flex flex-col items-center gap-0.5 group"
                     aria-label="Favorito"
                 >
-                    <div className={`p-1.5 rounded-full app-glass shadow-lg transition ${isFavorite ? 'text-red-500' : 'text-app-muted hover:text-red-500'}`}>
+                    <div className={`p-2 rounded-full app-glass shadow-lg transition ${isFavorite ? 'text-red-500' : 'text-app-muted group-hover:text-red-500'}`}>
                         <Heart className={`w-4 h-4 ${isFavorite ? 'fill-red-500' : ''}`} />
                     </div>
                     <span className="text-[9px] text-app-muted">
@@ -502,43 +801,50 @@ export default function SongDetailPage() {
                     </span>
                 </button>
 
+                {/* Agregar a lista */}
                 {isAuthenticated && (
                     <button
                         onClick={handleAddToList}
                         className="flex flex-col items-center gap-0.5 group"
                         aria-label="Agregar a lista"
+                        title="Agregar a un Setlist"
                     >
-                        <div className="p-1.5 rounded-full app-glass shadow-lg text-app-muted hover:text-green-500 transition">
+                        <div className="p-2 rounded-full app-glass shadow-lg text-app-muted group-hover:text-green-500 transition">
                             <ListPlus className="w-4 h-4" />
                         </div>
                         <span className="text-[9px] text-app-muted">Lista</span>
                     </button>
                 )}
 
-                <div className="flex flex-col items-center gap-0.5">
+                {/* Transposición de Tono */}
+                <div className="flex flex-col items-center gap-0.5 bg-app-surface/80 p-1 rounded-2xl border border-[var(--color-border)] shadow-lg backdrop-blur-md">
                     <button
-                        onClick={() => handleTranspose(-1)}
-                        className="p-1.5 rounded-full app-glass shadow-lg text-app-muted hover:text-[var(--color-primary)] transition"
+                        onClick={() => handleTranspose(1)}
+                        className="p-1.5 rounded-full hover:bg-[var(--color-border)] text-app-muted hover:text-[var(--color-primary)] transition"
+                        title="Subir 1 semitono (+1)"
                     >
-                        <ChevronLeft className="w-4 h-4" />
+                        <ChevronRight className="w-4 h-4 -rotate-90" />
                     </button>
-                    <span className="text-[9px] font-mono font-bold text-app min-w-[16px] text-center">
+                    <span className="text-[10px] font-mono font-bold text-app min-w-[20px] text-center">
                         {transpose === 0 ? '0' : `${transpose > 0 ? '+' : ''}${transpose}`}
                     </span>
                     <button
-                        onClick={() => handleTranspose(1)}
-                        className="p-1.5 rounded-full app-glass shadow-lg text-app-muted hover:text-[var(--color-primary)] transition"
+                        onClick={() => handleTranspose(-1)}
+                        className="p-1.5 rounded-full hover:bg-[var(--color-border)] text-app-muted hover:text-[var(--color-primary)] transition"
+                        title="Bajar 1 semitono (-1)"
                     >
-                        <ChevronRight className="w-4 h-4" />
+                        <ChevronLeft className="w-4 h-4 -rotate-90" />
                     </button>
                     <span className="text-[9px] text-app-muted">Tono</span>
                 </div>
 
+                {/* Tamaño de fuente */}
                 <button
                     onClick={handleFontSizeCycle}
                     className="flex flex-col items-center gap-0.5 group"
+                    title={`Tamaño actual: ${FONT_SIZE_LABELS[fontSize]} (toca para cambiar)`}
                 >
-                    <div className="p-1.5 rounded-full app-glass shadow-lg text-app-muted hover:text-[var(--color-primary)] transition">
+                    <div className="p-2 rounded-full app-glass shadow-lg text-app-muted group-hover:text-[var(--color-primary)] transition">
                         <Type className="w-4 h-4" />
                     </div>
                     <span className="text-[9px] text-app-muted">
@@ -546,66 +852,124 @@ export default function SongDetailPage() {
                     </span>
                 </button>
 
+                {/* Menú de más opciones */}
                 <div className="relative flex flex-col items-center gap-0.5">
                     <button
                         onClick={() => setShowSongMenu(prev => !prev)}
-                        className="p-1.5 rounded-full app-glass shadow-lg text-app-muted hover:text-[var(--color-primary)] transition"
+                        className="p-2 rounded-full app-glass shadow-lg text-app-muted hover:text-[var(--color-primary)] transition"
                         aria-label="Más acciones"
                         aria-expanded={showSongMenu}
                     >
-                        <MoreHorizontal className="w-5 h-5" />
+                        <MoreVertical className="w-4 h-4" />
                     </button>
                     <span className="text-[9px] text-app-muted">Más</span>
 
                     {showSongMenu && (
-                        <div className="absolute right-10 bottom-0 w-52 overflow-hidden rounded-lg app-card shadow-xl">
+                        <>
+                            <div className="fixed inset-0 z-40 bg-black/10" onClick={() => setShowSongMenu(false)} />
+                            <div className="absolute right-12 bottom-0 w-56 overflow-hidden rounded-xl app-card shadow-2xl border border-[var(--color-border)] divide-y divide-[var(--color-border)] z-50">
+                                <div className="p-1">
+                                    <button
+                                        onClick={() => {
+                                            setShowSongMenu(false);
+                                            setShowAutoScroll(s => !s);
+                                        }}
+                                        className="flex w-full items-center justify-between px-3 py-2 text-left text-xs font-medium text-app hover:bg-[var(--color-border)] rounded-lg transition"
+                                    >
+                                        <span className="flex items-center gap-2">
+                                            <ArrowDown className="w-4 h-4 text-[var(--color-primary)]" /> Auto-Scroll
+                                        </span>
+                                        <span className="text-[10px] text-app-muted font-mono">{showAutoScroll ? 'On' : 'Off'}</span>
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setShowSongMenu(false);
+                                            setIsMetronomeOpen(m => !m);
+                                        }}
+                                        className="flex w-full items-center justify-between px-3 py-2 text-left text-xs font-medium text-app hover:bg-[var(--color-border)] rounded-lg transition"
+                                    >
+                                        <span className="flex items-center gap-2">
+                                            <Radio className={`w-4 h-4 ${isMetronomeOpen ? 'text-[var(--color-primary)] animate-pulse' : 'text-purple-500'}`} /> Metrónomo
+                                        </span>
+                                        <span className="text-[10px] text-app-muted font-mono">{isMetronomeOpen ? 'Sonando' : 'Off'}</span>
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setShowSongMenu(false);
+                                            setIsCapoOpen(true);
+                                        }}
+                                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-app hover:bg-[var(--color-border)] rounded-lg transition"
+                                    >
+                                        <Scissors className="w-4 h-4 text-amber-500" /> Cejilla / Capo
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setShowSongMenu(false);
+                                            setIsSettingsOpen(true);
+                                        }}
+                                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-app hover:bg-[var(--color-border)] rounded-lg transition"
+                                    >
+                                        <SlidersHorizontal className="w-4 h-4 text-[var(--color-primary)]" /> Ajustes del visor
+                                    </button>
+                                </div>
+
                             {canCreateContent(currentUser) && (
-                                <button
-                                    onClick={() => {
-                                        setShowSongMenu(false);
-                                        setIsEditingChordPositions(true);
-                                    }}
-                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-app hover:bg-[var(--color-border)] transition"
-                                >
-                                    Editar posición de notas
-                                </button>
+                                <div className="p-1">
+                                    <button
+                                        onClick={() => {
+                                            setShowSongMenu(false);
+                                            setIsEditingChordPositions(true);
+                                        }}
+                                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-app hover:bg-[var(--color-border)] rounded-lg transition"
+                                    >
+                                        Ajustar posición de notas
+                                    </button>
+                                </div>
                             )}
+
                             {song.videoUrl && (
-                                <button
-                                    onClick={() => {
-                                        setShowSongMenu(false);
-                                        window.open(song.videoUrl, '_blank');
-                                    }}
-                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[var(--color-primary)] hover:bg-[var(--color-border)] transition"
-                                >
-                                    <Video className="w-4 h-4" /> Ver video
-                                </button>
+                                <div className="p-1">
+                                    <button
+                                        onClick={() => {
+                                            setShowSongMenu(false);
+                                            window.open(song.videoUrl, '_blank');
+                                        }}
+                                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-[var(--color-primary)] hover:bg-[var(--color-border)] rounded-lg transition"
+                                    >
+                                        <Video className="w-4 h-4" /> Ver video de referencia
+                                    </button>
+                                </div>
                             )}
-                            {canManageSong && <>
-                                <button
-                                    onClick={() => {
-                                        setShowSongMenu(false);
-                                        router.push(`/canciones/${song.id}/editar`);
-                                    }}
-                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-app hover:bg-[var(--color-border)] transition"
-                                >
-                                    <Edit className="w-4 h-4" /> Editar canción
-                                </button>
-                                <button
-                                    onClick={() => {
-                                        setShowSongMenu(false);
-                                        handleDelete();
-                                    }}
-                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-[var(--color-border)] transition"
-                                >
-                                    <Trash2 className="w-4 h-4" /> Eliminar canción
-                                </button>
-                            </>}
+
+                            {canManageSong && (
+                                <div className="p-1">
+                                    <button
+                                        onClick={() => {
+                                            setShowSongMenu(false);
+                                            router.push(`/canciones/${song.id}/editar`);
+                                        }}
+                                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-app hover:bg-[var(--color-border)] rounded-lg transition"
+                                    >
+                                        <Edit className="w-4 h-4" /> Editar canción
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setShowSongMenu(false);
+                                            handleDelete();
+                                        }}
+                                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg transition"
+                                    >
+                                        <Trash2 className="w-4 h-4" /> Eliminar canción
+                                    </button>
+                                </div>
+                            )}
                         </div>
-                    )}
+                    </>
+                )}
                 </div>
             </div>
 
+            {/* Modal para Agregar a Setlist */}
             <AddToSetlistModal
                 isOpen={showAddModal}
                 onClose={() => setShowAddModal(false)}
@@ -619,7 +983,7 @@ export default function SongDetailPage() {
                 }}
             />
 
-            {/* Modal para Acordes */}
+            {/* Modal para Diagramas de Acordes */}
             <ChordModal
                 chord={selectedChord}
                 chordName={selectedChordName}
@@ -629,6 +993,34 @@ export default function SongDetailPage() {
                 initialView="guitar"
                 canCreate={canCreateContent(currentUser)}
                 canManage={canManageContent(currentUser, selectedChord?.userId ?? null)}
+            />
+
+            {/* Metrónomo flotante interactivo y no bloqueante */}
+            <Metronome
+                isOpen={isMetronomeOpen}
+                onClose={() => setIsMetronomeOpen(false)}
+                initialBpm={songBpm}
+                autoPlayOnOpen={true}
+            />
+
+            {/* Modal Cejilla / Capo */}
+            <CapoCalculatorModal
+                isOpen={isCapoOpen}
+                onClose={() => setIsCapoOpen(false)}
+                currentKey={currentTransposedKey || song.key || 'C'}
+                onApplyTransposition={(delta) => setTranspose(t => t + delta)}
+            />
+
+            {/* Modal Ajustes del Visor */}
+            <SongSettingsModal
+                isOpen={isSettingsOpen}
+                onClose={() => setIsSettingsOpen(false)}
+                hideChords={hideChords}
+                onToggleHideChords={setHideChords}
+                columns={columns}
+                onColumnsChange={setColumns}
+                chordColor={chordColor}
+                onChordColorChange={setChordColor}
             />
         </div>
     );

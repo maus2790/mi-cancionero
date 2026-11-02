@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { Heart, ListPlus, Play, Pause, Video } from 'lucide-react';
+import { useChordNotation } from '@/lib/ChordNotationContext';
 
 interface SongCardProps {
     song: {
@@ -23,6 +24,7 @@ interface SongCardProps {
 }
 
 export function SongCard({ song, playingId, onPlayPause, isFavorite, onToggleFavorite, onAddToList }: SongCardProps) {
+    const { formatKey } = useChordNotation();
     const hasVideo = Boolean(song.videoUrl && song.videoUrl.trim() !== '');
     return (
         <div className={`app-card p-4 hover:shadow-lg transition ${!song.isPublic ? 'border-yellow-400 dark:border-yellow-600 ring-1 ring-yellow-200 dark:ring-yellow-900/50' : ''}`}>
@@ -38,8 +40,8 @@ export function SongCard({ song, playingId, onPlayPause, isFavorite, onToggleFav
                     )}
                     <div className="flex gap-2 mt-1 flex-wrap items-center">
                         {song.key && (
-                            <span className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full">
-                                {song.key}
+                            <span className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full font-medium">
+                                {formatKey(song.key)}
                             </span>
                         )}
                         {song.style && (

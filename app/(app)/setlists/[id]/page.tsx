@@ -5,10 +5,17 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { getSetlistById, updateSongInSetlist } from '@/app/actions/setlists';
 import { transposeChordPro } from '@/lib/chords';
 import { useTitle } from '@/lib/TitleContext';
-import { Type, ChevronLeft, ChevronRight, Maximize2, Minimize2 } from 'lucide-react';
+import {
+    Type, ChevronLeft, ChevronRight, Maximize2, Minimize2,
+    Radio, ArrowDown, SkipBack, SkipForward, Music, MoreVertical
+} from 'lucide-react';
 import { useNetworkStatus } from '@/lib/hooks/useNetworkStatus';
-import { useOfflineMode } from '@/lib/hooks/useOfflineMode';
 import { getOfflineSetlistById } from '@/lib/offline-db';
+import { Metronome } from '@/components/Metronome';
+import { AutoScrollController } from '@/components/AutoScrollController';
+import { useChordNotation } from '@/lib/ChordNotationContext';
+import ChordModal from '@/components/ChordModal';
+import { getChordByNameExact } from '@/app/actions/chords';
 
 const FONT_SIZES = {
     small: 'text-sm',
@@ -28,6 +35,7 @@ export default function SetlistDetailPage() {
     const { id } = useParams();
     const router = useRouter();
     const { setTitle, setShowBack, setOnBack } = useTitle();
+    const { formatChordPro, toCanonicalAngloChord } = useChordNotation();
     const [setlist, setSetlist] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [currentSongIndex, setCurrentSongIndex] = useState(0);
@@ -35,10 +43,17 @@ export default function SetlistDetailPage() {
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [isHovering, setIsHovering] = useState(false);
     const [isVisible, setIsVisible] = useState(true);
+    const [isMetronomeOpen, setIsMetronomeOpen] = useState(false);
+    const [showAutoScroll, setShowAutoScroll] = useState(false);
+    const [showMobileMenu, setShowMobileMenu] = useState(false);
+
+    const [selectedChord, setSelectedChord] = useState<any>(null);
+    const [selectedChordName, setSelectedChordName] = useState<string>('');
+    const [isChordModalOpen, setIsChordModalOpen] = useState(false);
+
     const timeoutRef = useRef<NodeJS.Timeout | null>(null);
     const touchStartX = useRef<number | null>(null);
     const { isOnline } = useNetworkStatus();
-    const { isSectionOffline } = useOfflineMode();
 
     const makeVisible = useCallback(() => {
         setIsVisible(true);
@@ -47,7 +62,7 @@ export default function SetlistDetailPage() {
             if (!isHovering) {
                 setIsVisible(false);
             }
-        }, 10000);
+        }, 12000);
     }, [isHovering]);
 
     const handleMouseEnter = () => {
@@ -64,7 +79,7 @@ export default function SetlistDetailPage() {
         if (timeoutRef.current) clearTimeout(timeoutRef.current);
         timeoutRef.current = setTimeout(() => {
             setIsVisible(false);
-        }, 10000);
+        }, 12000);
     };
 
     useEffect(() => {
@@ -77,7 +92,7 @@ export default function SetlistDetailPage() {
     const handleTranspose = async (delta: number) => {
         if (!setlist) return;
         const currentSong = setlist.songs[currentSongIndex];
-        const newTranspose = currentSong.transposition + delta;
+        const newTranspose = (currentSong.transposition || 0) + delta;
 
         const updatedSongs = [...setlist.songs];
         updatedSongs[currentSongIndex].transposition = newTranspose;
@@ -95,7 +110,7 @@ export default function SetlistDetailPage() {
         if (!setlist) return;
         const currentSong = setlist.songs[currentSongIndex];
         const fontSizesArray = Object.keys(FONT_SIZES);
-        const currentIndex = fontSizesArray.indexOf(currentSong.fontSize);
+        const currentIndex = fontSizesArray.indexOf(currentSong.fontSize || 'medium');
         const newFontSize = fontSizesArray[(currentIndex + 1) % fontSizesArray.length];
 
         const updatedSongs = [...setlist.songs];
@@ -148,6 +163,34 @@ export default function SetlistDetailPage() {
         touchStartX.current = null;
     };
 
+    // Navegación con teclado (Flechas izquierda/derecha)
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) return;
+            if (e.key === 'ArrowRight' && setlist && currentSongIndex < setlist.songs.length - 1) {
+                setCurrentSongIndex(i => i + 1);
+            } else if (e.key === 'ArrowLeft' && currentSongIndex > 0) {
+                setCurrentSongIndex(i => i - 1);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [setlist, currentSongIndex]);
+
+    const handleChordClick = async (fullChord: string) => {
+        const baseChord = fullChord.split('/')[0];
+        const canonicalAnglo = toCanonicalAngloChord(baseChord);
+        setSelectedChordName(baseChord);
+        setSelectedChord(null);
+        setIsChordModalOpen(true);
+        try {
+            const chordData = await getChordByNameExact(canonicalAnglo);
+            setSelectedChord(chordData);
+        } catch (error) {
+            console.error('Error fetching chord:', error);
+        }
+    };
+
     useEffect(() => {
         const loadSetlist = async () => {
             try {
@@ -174,7 +217,7 @@ export default function SetlistDetailPage() {
                     setTitle('Lista vacía');
                 }
                 setLoading(false);
-            } catch (err) {
+            } catch {
                 setError('No se pudo cargar la lista');
                 setLoading(false);
             }
@@ -215,76 +258,234 @@ export default function SetlistDetailPage() {
     if (songs.length === 0) {
         return (
             <div className="flex flex-col items-center justify-center h-[60vh] text-app-muted">
-                <p className="text-lg">Esta lista está vacía</p>
-                <p className="text-sm">Agrega canciones desde la página de cada canción</p>
+                <Music className="w-12 h-12 mb-3 text-app-muted opacity-50" />
+                <p className="text-lg font-semibold">Esta lista está vacía</p>
+                <p className="text-sm">Agrega canciones desde el catálogo</p>
                 <button
                     onClick={() => router.push('/canciones')}
                     className="mt-4 app-button px-4 py-2 rounded-lg"
                 >
-                    Ir a canciones
+                    Explorar canciones
                 </button>
             </div>
         );
     }
 
     const currentSong = songs[currentSongIndex];
-    const transposedContent =
-        currentSong.transposition !== 0
+    const rawTransposed =
+        (currentSong.transposition || 0) !== 0
             ? transposeChordPro(currentSong.song.content, currentSong.transposition)
             : currentSong.song.content;
+    const transposedContent = formatChordPro(rawTransposed);
     const fontSizeClass =
         FONT_SIZES[currentSong.fontSize as keyof typeof FONT_SIZES] || 'text-base';
 
+    const currentSongBpm = (() => {
+        if (!currentSong?.song?.content) return 100;
+        const match = currentSong.song.content.match(/\{(?:tempo|bpm):\s*(\d+)\}/i);
+        return match ? parseInt(match[1], 10) : 100;
+    })();
+
     return (
         <div className={`transition-all overflow-y-auto scroll-smooth ${isFullscreen ? 'fixed inset-0 z-50 bg-app' : 'min-h-screen flex flex-col'}`}>
-            {/* Barra de números */}
-            <div className={`fixed ${isFullscreen ? 'top-0 left-0 right-0' : 'top-16 left-0 right-0 min-[769px]:left-64'} z-40 app-glass border-b py-1 px-1 overflow-x-auto backdrop-blur shadow-sm`}>
-                <div className="flex gap-0.5 justify-center min-w-max">
-                    {songs.map((item: any, index: number) => (
-                        <button
-                            key={item.id}
-                            onClick={() => setCurrentSongIndex(index)}
-                            className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold transition ${index === currentSongIndex
-                                ? 'bg-[var(--color-primary)] text-white'
-                                : 'bg-[var(--color-border)] text-app hover:opacity-80'
+            {/* Barra de navegación de canciones del setlist */}
+            <div className={`sticky ${isFullscreen ? 'top-0' : 'top-0'} z-40 app-glass border-b py-2 px-3 overflow-x-auto backdrop-blur shadow-sm`}>
+                <div className="flex items-center justify-between gap-3 max-w-6xl mx-auto">
+                    {/* Botón Canción Anterior */}
+                    <button
+                        onClick={() => setCurrentSongIndex(i => Math.max(0, i - 1))}
+                        disabled={currentSongIndex === 0}
+                        className="p-1.5 rounded-lg border border-[var(--color-border)] text-app hover:bg-[var(--color-border)] disabled:opacity-30 transition flex items-center gap-1 text-xs"
+                        title="Canción anterior (Flecha Izq)"
+                    >
+                        <SkipBack className="w-4 h-4" />
+                        <span className="hidden sm:inline">Anterior</span>
+                    </button>
+
+                    {/* Chips de canciones numeradas */}
+                    <div className="flex gap-1.5 justify-center overflow-x-auto scrollbar-none py-0.5">
+                        {songs.map((item: any, index: number) => (
+                            <button
+                                key={item.id}
+                                onClick={() => setCurrentSongIndex(index)}
+                                className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition flex-shrink-0 ${
+                                    index === currentSongIndex
+                                        ? 'bg-[var(--color-primary)] text-white shadow-md scale-105'
+                                        : 'bg-[var(--color-border)] text-app hover:opacity-80'
                                 }`}
-                        >
-                            {index + 1}
-                        </button>
-                    ))}
+                                title={item.song?.title}
+                            >
+                                {index + 1}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Botón Siguiente Canción */}
+                    <button
+                        onClick={() => setCurrentSongIndex(i => Math.min(songs.length - 1, i + 1))}
+                        disabled={currentSongIndex === songs.length - 1}
+                        className="p-1.5 rounded-lg border border-[var(--color-border)] text-app hover:bg-[var(--color-border)] disabled:opacity-30 transition flex items-center gap-1 text-xs"
+                        title="Siguiente canción (Flecha Der)"
+                    >
+                        <span className="hidden sm:inline">Siguiente</span>
+                        <SkipForward className="w-4 h-4" />
+                    </button>
                 </div>
             </div>
 
             {/* Contenido de la canción */}
             <div
-                className="flex-1 overflow-y-auto px-4 pt-14 pb-20"
+                className="flex-1 overflow-y-auto px-4 sm:px-8 pt-4 pb-28"
                 onTouchStart={handleTouchStart}
                 onTouchEnd={handleTouchEnd}
             >
-                <div className={`max-w-4xl mx-auto whitespace-pre-wrap ${fontSizeClass} text-app`}>
-                    {transposedContent.split('\n').map((line: string, i: number) => {
-                        const parts = line.split(/(\[[^\]]+\])/g);
-                        return (
-                            <div key={i} className="leading-relaxed">
-                                {parts.map((part: string, j: number) => {
-                                    if (part.startsWith('[') && part.endsWith(']')) {
-                                        return (
-                                            <span key={j} className="text-[var(--color-primary)] font-bold">
-                                                {part.slice(1, -1)}
-                                            </span>
-                                        );
-                                    }
-                                    return <span key={j}>{part}</span>;
-                                })}
-                            </div>
-                        );
-                    })}
+                <div className="max-w-4xl mx-auto">
+                    {/* Header de la canción actual */}
+                    <div className="mb-4 pb-3 border-b border-[var(--color-border)] flex items-center justify-between">
+                        <div>
+                            <h2 className="text-xl sm:text-2xl font-bold text-app">{currentSong.song.title}</h2>
+                            {currentSong.song.artist && (
+                                <p className="text-xs sm:text-sm text-app-muted">{currentSong.song.artist}</p>
+                            )}
+                        </div>
+
+                        {/* Botones de acción rápida: en escritorio muestra los botones */}
+                        <div className="hidden sm:flex items-center gap-2">
+                            {/* AutoScroll Toggle */}
+                            <button
+                                onClick={() => setShowAutoScroll(s => !s)}
+                                className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition ${
+                                    showAutoScroll ? 'bg-[var(--color-primary)] text-white shadow-sm' : 'border border-[var(--color-border)] text-app hover:bg-[var(--color-border)]'
+                                }`}
+                            >
+                                <ArrowDown className="w-3.5 h-3.5" />
+                                <span>Auto-Scroll</span>
+                            </button>
+
+                            {/* Metrónomo */}
+                            <button
+                                onClick={() => setIsMetronomeOpen(m => !m)}
+                                className={`p-2 rounded-xl border transition flex items-center gap-1 text-xs font-medium ${
+                                    isMetronomeOpen
+                                        ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)] shadow-sm'
+                                        : 'border border-[var(--color-border)] hover:bg-[var(--color-border)] text-app'
+                                }`}
+                                title={isMetronomeOpen ? "Detener metrónomo" : "Iniciar metrónomo"}
+                            >
+                                <Radio className={`w-4 h-4 ${isMetronomeOpen ? 'text-white animate-pulse' : 'text-[var(--color-primary)]'}`} />
+                                <span>Metrónomo</span>
+                            </button>
+                        </div>
+
+                        {/* EN MODO CELULAR: Opciones de auto-scroll y metrónomo dentro de los tres puntitos */}
+                        <div className="relative sm:hidden flex items-center">
+                            <button
+                                onClick={() => setShowMobileMenu(m => !m)}
+                                className={`p-2 rounded-xl border border-[var(--color-border)] text-app transition ${
+                                    showMobileMenu || showAutoScroll || isMetronomeOpen
+                                        ? 'bg-[var(--color-primary)]/15 border-[var(--color-primary)] text-[var(--color-primary)]'
+                                        : 'hover:bg-[var(--color-border)]'
+                                }`}
+                                aria-label="Más opciones"
+                                title="Más opciones"
+                            >
+                                <MoreVertical className="w-4 h-4" />
+                            </button>
+
+                            {showMobileMenu && (
+                                <>
+                                    <div
+                                        className="fixed inset-0 z-40 bg-black/20"
+                                        onClick={() => setShowMobileMenu(false)}
+                                    />
+                                    <div className="absolute right-0 top-full mt-2 w-52 overflow-hidden rounded-2xl app-card shadow-2xl border border-[var(--color-border)] z-50 p-1 divide-y divide-[var(--color-border)]">
+                                        <div className="p-1">
+                                            <button
+                                                onClick={() => {
+                                                    setShowAutoScroll(s => !s);
+                                                    setShowMobileMenu(false);
+                                                }}
+                                                className={`flex w-full items-center justify-between px-3 py-2 text-left text-xs font-medium rounded-xl transition ${
+                                                    showAutoScroll
+                                                        ? 'bg-[var(--color-primary)]/15 text-[var(--color-primary)] font-bold'
+                                                        : 'text-app hover:bg-[var(--color-border)]'
+                                                }`}
+                                            >
+                                                <span className="flex items-center gap-2">
+                                                    <ArrowDown className="w-4 h-4 text-[var(--color-primary)]" />
+                                                    Auto-Scroll
+                                                </span>
+                                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--color-border)] font-mono">
+                                                    {showAutoScroll ? 'On' : 'Off'}
+                                                </span>
+                                            </button>
+
+                                            <button
+                                                onClick={() => {
+                                                    setIsMetronomeOpen(m => !m);
+                                                    setShowMobileMenu(false);
+                                                }}
+                                                className={`flex w-full items-center justify-between px-3 py-2 text-left text-xs font-medium rounded-xl transition ${
+                                                    isMetronomeOpen
+                                                        ? 'bg-[var(--color-primary)]/15 text-[var(--color-primary)] font-bold'
+                                                        : 'text-app hover:bg-[var(--color-border)]'
+                                                }`}
+                                            >
+                                                <span className="flex items-center gap-2">
+                                                    <Radio className={`w-4 h-4 ${isMetronomeOpen ? 'text-[var(--color-primary)] animate-pulse' : 'text-purple-500'}`} />
+                                                    Metrónomo
+                                                </span>
+                                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--color-border)] font-mono">
+                                                    {isMetronomeOpen ? 'Sonando' : 'Off'}
+                                                </span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Letra y acordes */}
+                    <div className={`whitespace-pre font-mono ${fontSizeClass} text-app leading-relaxed`}>
+                        {transposedContent.split('\n').map((line: string, i: number) => {
+                            const parts = line.split(/(\[[^\]]+\])/g);
+                            return (
+                                <div key={i} className="leading-relaxed hover:bg-[var(--color-border)]/10 rounded px-1 -mx-1 transition-colors">
+                                    {parts.map((part: string, j: number) => {
+                                        if (part.startsWith('[') && part.endsWith(']')) {
+                                            const fullChord = part.slice(1, -1);
+                                            return (
+                                                <button
+                                                    key={j}
+                                                    onClick={() => handleChordClick(fullChord)}
+                                                    className="inline-block text-left text-[var(--color-primary)] font-bold hover:underline cursor-pointer focus:outline-none"
+                                                    title={`Ver acorde ${fullChord}`}
+                                                >
+                                                    {fullChord}
+                                                </button>
+                                            );
+                                        }
+                                        return <span key={j}>{part}</span>;
+                                    })}
+                                </div>
+                            );
+                        })}
+                    </div>
                 </div>
             </div>
 
+            {/* Widget flotante de Auto-Scroll */}
+            {showAutoScroll && (
+                <AutoScrollController
+                    scrollContainerId="main-scroll-container"
+                    onClose={() => setShowAutoScroll(false)}
+                />
+            )}
+
             {/* Controles flotantes a la derecha */}
             <div
-                className={`fixed right-3 sm:right-6 bottom-20 sm:bottom-8 flex flex-col items-center gap-3 transition-all duration-300 ${(isVisible || isHovering) ? 'opacity-100' : 'opacity-40'} z-50`}
+                className={`fixed right-3 sm:right-6 bottom-20 sm:bottom-8 flex flex-col items-center gap-2.5 transition-all duration-300 ${(isVisible || isHovering) ? 'opacity-100' : 'opacity-40'} z-50`}
                 onMouseEnter={handleMouseEnter}
                 onMouseLeave={handleMouseLeave}
             >
@@ -292,6 +493,7 @@ export default function SetlistDetailPage() {
                     onClick={toggleFullscreen}
                     className="flex flex-col items-center gap-0.5 group"
                     aria-label="Pantalla completa"
+                    title={isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
                 >
                     <div className="p-2 rounded-full app-glass shadow-lg text-app-muted hover:text-[var(--color-primary)] transition">
                         {isFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
@@ -301,21 +503,23 @@ export default function SetlistDetailPage() {
                     </span>
                 </button>
 
-                <div className="flex flex-col items-center gap-0.5">
-                    <button
-                        onClick={() => handleTranspose(-1)}
-                        className="p-2 rounded-full app-glass shadow-lg text-app-muted hover:text-[var(--color-primary)] transition"
-                    >
-                        <ChevronLeft className="w-5 h-5" />
-                    </button>
-                    <span className="text-[9px] font-mono font-bold text-app min-w-[16px] text-center">
-                        {currentSong.transposition === 0 ? '0' : `${currentSong.transposition > 0 ? '+' : ''}${currentSong.transposition}`}
-                    </span>
+                <div className="flex flex-col items-center gap-0.5 bg-app-surface/80 p-1 rounded-2xl border border-[var(--color-border)] shadow-lg backdrop-blur-md">
                     <button
                         onClick={() => handleTranspose(1)}
-                        className="p-2 rounded-full app-glass shadow-lg text-app-muted hover:text-[var(--color-primary)] transition"
+                        className="p-1.5 rounded-full hover:bg-[var(--color-border)] text-app-muted hover:text-[var(--color-primary)] transition"
+                        title="Subir tono (+1)"
                     >
-                        <ChevronRight className="w-5 h-5" />
+                        <ChevronRight className="w-4 h-4 -rotate-90" />
+                    </button>
+                    <span className="text-[9px] font-mono font-bold text-app min-w-[16px] text-center">
+                        {(currentSong.transposition || 0) === 0 ? '0' : `${(currentSong.transposition || 0) > 0 ? '+' : ''}${currentSong.transposition}`}
+                    </span>
+                    <button
+                        onClick={() => handleTranspose(-1)}
+                        className="p-1.5 rounded-full hover:bg-[var(--color-border)] text-app-muted hover:text-[var(--color-primary)] transition"
+                        title="Bajar tono (-1)"
+                    >
+                        <ChevronLeft className="w-4 h-4 -rotate-90" />
                     </button>
                     <span className="text-[9px] text-app-muted">Tono</span>
                 </div>
@@ -332,6 +536,24 @@ export default function SetlistDetailPage() {
                     </span>
                 </button>
             </div>
+
+            {/* Metrónomo flotante interactivo y no bloqueante */}
+            <Metronome
+                isOpen={isMetronomeOpen}
+                onClose={() => setIsMetronomeOpen(false)}
+                initialBpm={currentSongBpm}
+                autoPlayOnOpen={true}
+            />
+
+            {/* Modal para Acordes */}
+            <ChordModal
+                chord={selectedChord}
+                chordName={selectedChordName}
+                isOpen={isChordModalOpen}
+                onClose={() => setIsChordModalOpen(false)}
+                allowToggle={true}
+                initialView="guitar"
+            />
         </div>
     );
 }

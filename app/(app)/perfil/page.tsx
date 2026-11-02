@@ -4,8 +4,9 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { getCurrentUser, updateProfile, getUserStats, handleLogout } from '@/app/actions/auth';
 import { useTitle } from '@/lib/TitleContext';
-import { User, Mail, Lock, Save, Music, List, Heart, Edit, X, LogOut } from 'lucide-react';
+import { User, Mail, Lock, Save, Music, List, Heart, Edit, X, LogOut, Radio, Check } from 'lucide-react';
 import { AvatarUpload } from '@/components/AvatarUpload';
+import { useChordNotation } from '@/lib/ChordNotationContext';
 
 export default function ProfilePage() {
     const router = useRouter();
@@ -25,6 +26,8 @@ export default function ProfilePage() {
         password: '',
         confirmPassword: '',
     });
+
+    const { notation, setNotation } = useChordNotation();
 
     useEffect(() => {
         setTitle('Mi Perfil');
@@ -167,6 +170,91 @@ export default function ProfilePage() {
                         <p className="text-xs text-gray-500 dark:text-gray-400">{stat.label}</p>
                     </div>
                 ))}
+            </div>
+
+            {/* Configuración de Notación de Acordes */}
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-6 mt-6">
+                <div className="flex items-center gap-3 mb-2">
+                    <div className="p-2.5 rounded-xl bg-[var(--color-primary)]/10 text-[var(--color-primary)]">
+                        <Radio className="w-5 h-5" />
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-bold text-gray-800 dark:text-white">
+                            Estilo de visualización de acordes
+                        </h3>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                            Elige si deseas ver los acordes en cifrado americano (A, B, C...) o en solfeo latino (Do, Re, Mi...) en todo el cancionero.
+                        </p>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                    {/* Opción 1: Sistema Anglosajón */}
+                    <button
+                        type="button"
+                        onClick={() => setNotation('anglosaxon')}
+                        className={`p-4 rounded-xl border-2 text-left transition-all relative ${
+                            notation === 'anglosaxon'
+                                ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/5 shadow-md ring-1 ring-[var(--color-primary)]/30'
+                                : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 bg-gray-50/50 dark:bg-gray-800/40'
+                        }`}
+                    >
+                        <div className="flex items-center justify-between mb-2">
+                            <span className="font-bold text-sm sm:text-base text-gray-800 dark:text-white">
+                                Sistema Anglosajón
+                            </span>
+                            {notation === 'anglosaxon' ? (
+                                <span className="w-5 h-5 rounded-full bg-[var(--color-primary)] text-white flex items-center justify-center text-xs font-bold">
+                                    <Check className="w-3.5 h-3.5" />
+                                </span>
+                            ) : (
+                                <span className="w-5 h-5 rounded-full border border-gray-300 dark:border-gray-600" />
+                            )}
+                        </div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                            Letras tradicionales (A, B, C, D, E, F, G). El estándar internacional de partituras, cancioneros y cifrado moderno.
+                        </p>
+                        <div className="flex flex-wrap gap-1.5 pt-2.5 border-t border-gray-200/80 dark:border-gray-700/80">
+                            <span className="px-2 py-0.5 rounded bg-gray-200/80 dark:bg-gray-700 font-mono text-xs font-bold text-gray-800 dark:text-gray-200">C</span>
+                            <span className="px-2 py-0.5 rounded bg-gray-200/80 dark:bg-gray-700 font-mono text-xs font-bold text-gray-800 dark:text-gray-200">Am7</span>
+                            <span className="px-2 py-0.5 rounded bg-gray-200/80 dark:bg-gray-700 font-mono text-xs font-bold text-gray-800 dark:text-gray-200">D/F#</span>
+                            <span className="px-2 py-0.5 rounded bg-gray-200/80 dark:bg-gray-700 font-mono text-xs font-bold text-gray-800 dark:text-gray-200">Gmaj7</span>
+                        </div>
+                    </button>
+
+                    {/* Opción 2: Sistema Latino */}
+                    <button
+                        type="button"
+                        onClick={() => setNotation('latin')}
+                        className={`p-4 rounded-xl border-2 text-left transition-all relative ${
+                            notation === 'latin'
+                                ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/5 shadow-md ring-1 ring-[var(--color-primary)]/30'
+                                : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 bg-gray-50/50 dark:bg-gray-800/40'
+                        }`}
+                    >
+                        <div className="flex items-center justify-between mb-2">
+                            <span className="font-bold text-sm sm:text-base text-gray-800 dark:text-white">
+                                Sistema Latino / Solfeo
+                            </span>
+                            {notation === 'latin' ? (
+                                <span className="w-5 h-5 rounded-full bg-[var(--color-primary)] text-white flex items-center justify-center text-xs font-bold">
+                                    <Check className="w-3.5 h-3.5" />
+                                </span>
+                            ) : (
+                                <span className="w-5 h-5 rounded-full border border-gray-300 dark:border-gray-600" />
+                            )}
+                        </div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                            Notas en español (Do, Re, Mi, Fa, Sol, La, Si). Ideal para coros, aprendizaje de solfeo y vocalistas.
+                        </p>
+                        <div className="flex flex-wrap gap-1.5 pt-2.5 border-t border-gray-200/80 dark:border-gray-700/80">
+                            <span className="px-2 py-0.5 rounded bg-gray-200/80 dark:bg-gray-700 font-mono text-xs font-bold text-gray-800 dark:text-gray-200">Do</span>
+                            <span className="px-2 py-0.5 rounded bg-gray-200/80 dark:bg-gray-700 font-mono text-xs font-bold text-gray-800 dark:text-gray-200">Lam7</span>
+                            <span className="px-2 py-0.5 rounded bg-gray-200/80 dark:bg-gray-700 font-mono text-xs font-bold text-gray-800 dark:text-gray-200">Re/Fa#</span>
+                            <span className="px-2 py-0.5 rounded bg-gray-200/80 dark:bg-gray-700 font-mono text-xs font-bold text-gray-800 dark:text-gray-200">Solmaj7</span>
+                        </div>
+                    </button>
+                </div>
             </div>
 
             {/* Formulario de edición */}
