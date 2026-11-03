@@ -11,7 +11,7 @@ import { transposeChordPro } from '@/lib/chords';
 import {
     Heart, Trash2, Edit, ListPlus, Type, ChevronLeft, ChevronRight,
     Play, Pause, Maximize2, Minimize2, Square, MoreVertical,
-    Video, Loader2, Radio, SlidersHorizontal, ArrowDown, Scissors, Music2
+    Video, Loader2, Radio, SlidersHorizontal, ArrowDown, Music2, FileDown, MoveHorizontal, Columns
 } from 'lucide-react';
 import { getCurrentUser } from '@/app/actions/auth';
 import { useTitle } from '@/lib/TitleContext';
@@ -23,7 +23,6 @@ import { getOfflineSongById, getOfflineSetlists } from '@/lib/offline-db';
 import { useChordNotation } from '@/lib/ChordNotationContext';
 import { Metronome } from '@/components/Metronome';
 import { AutoScrollController } from '@/components/AutoScrollController';
-import { CapoCalculatorModal } from '@/components/CapoCalculatorModal';
 import { SongSettingsModal } from '@/components/SongSettingsModal';
 import { NOTES, normalizeNote } from '@/lib/constants';
 
@@ -69,7 +68,6 @@ export default function SongDetailPage() {
 
     // Nuevas funcionalidades avanzadas
     const [isMetronomeOpen, setIsMetronomeOpen] = useState(false);
-    const [isCapoOpen, setIsCapoOpen] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [showAutoScroll, setShowAutoScroll] = useState(false);
     const [showMobileToolbarMenu, setShowMobileToolbarMenu] = useState(false);
@@ -93,7 +91,6 @@ export default function SongDetailPage() {
     const [duration, setDuration] = useState(0);
     const [playbackRate, setPlaybackRate] = useState(1);
     const [isFullscreen, setIsFullscreen] = useState(false);
-    const [showSongMenu, setShowSongMenu] = useState(false);
     const [isEditingChordPositions, setIsEditingChordPositions] = useState(false);
     const [chordOffsets, setChordOffsets] = useState<Record<string, number>>({});
     const [dragStart, setDragStart] = useState<{ key: string; clientX: number; offset: number } | null>(null);
@@ -281,6 +278,16 @@ export default function SongDetailPage() {
         }
     };
 
+    const handlePrintPdf = () => {
+        const prevTitle = document.title;
+        if (song?.title) document.title = song.title;
+        setTimeout(() => {
+            window.print();
+            // Restaurar el titulo despues de que el dialogo de impresion se cierre
+            setTimeout(() => { document.title = prevTitle; }, 1000);
+        }, 200);
+    };
+
     const handleAddToList = () => {
         setShowAddModal(true);
         makeVisible();
@@ -401,7 +408,7 @@ export default function SongDetailPage() {
     const chordColorClass = CHORD_COLOR_CLASSES[chordColor] || 'text-[var(--color-primary)]';
 
     return (
-        <div ref={containerRef} className="bg-app min-h-screen">
+        <div ref={containerRef} className="bg-app min-h-screen overflow-x-hidden">
 
             {/* Cabecera exclusiva para impresión */}
             <div className="hidden print:block mb-6 border-b pb-4">
@@ -431,7 +438,7 @@ export default function SongDetailPage() {
 
             {/* Reproductor sticky */}
             {song.audioUrl && isPlayerOpen && (
-                <div className="sticky top-0 z-40 app-glass border-b px-2 sm:px-4 py-2 sm:py-3 flex flex-row items-center gap-2 sm:gap-4 shadow-sm print:hidden">
+                <div className="sticky top-0 z-40 app-glass border-b px-2 sm:px-4 py-1 sm:py-1 flex flex-row items-center gap-2 sm:gap-4 shadow-sm print:hidden">
                     <div className="flex items-center gap-2 flex-1 min-w-0">
                         <span className="text-[10px] sm:text-xs text-app-muted font-mono w-8 sm:w-10 text-right shrink-0">
                             {Math.floor(currentTime / 60)}:{(Math.floor(currentTime % 60)).toString().padStart(2, '0')}
@@ -487,8 +494,8 @@ export default function SongDetailPage() {
             )}
 
             {/* Barra de herramientas superior rápida (en pantalla) */}
-            <div className="max-w-6xl mx-auto px-4 pt-4 pb-2 print:hidden">
-                <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-2xl app-card border border-[var(--color-border)]">
+            <div className="max-w-6xl mx-auto px-2 py-1.5 print:hidden">
+                <div className="flex flex-wrap items-center justify-between gap-2 px-1.5 py-1 rounded-2xl app-card border border-[var(--color-border)]">
                     {/* Info Tonalidad y Artista */}
                     <div className="flex items-center gap-2 flex-wrap">
                         {currentTransposedKey && (
@@ -509,200 +516,192 @@ export default function SongDetailPage() {
                         )}
                     </div>
 
-                    {/* Botones de acción rápida: Solo visibles en escritorio (sm y superior) */}
-                    <div className="hidden sm:flex items-center gap-1.5">
-                        {/* Auto-Scroll Toggle */}
+                    {/* Grupo derecho: botones inline (sm+) + tres puntos siempre juntos */}
+                    <div className="flex items-center gap-1">
+
+                        {/* Auto-Scroll: visible como botón en sm+ */}
                         <button
                             onClick={() => setShowAutoScroll(s => !s)}
-                            className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition ${
-                                showAutoScroll
-                                    ? 'bg-[var(--color-primary)] text-white shadow-sm'
-                                    : 'hover:bg-[var(--color-border)] text-app'
-                            }`}
+                            className={`hidden sm:flex px-2.5 py-1.5 rounded-xl text-xs font-semibold items-center gap-1.5 transition ${showAutoScroll
+                                ? 'bg-[var(--color-primary)] text-white shadow-sm'
+                                : 'hover:bg-[var(--color-border)] text-app'
+                                }`}
                             title="Alternar barra de auto-scroll"
                         >
                             <ArrowDown className="w-3.5 h-3.5" />
                             <span>Auto-Scroll</span>
                         </button>
 
-                        {/* Metrónomo */}
+                        {/* Metrónomo: visible como botón en sm+ */}
                         <button
                             onClick={() => setIsMetronomeOpen(m => !m)}
-                            className={`p-2 rounded-xl transition flex items-center gap-1 text-xs font-medium ${
-                                isMetronomeOpen
-                                    ? 'bg-[var(--color-primary)] text-white shadow-sm'
-                                    : 'hover:bg-[var(--color-border)] text-app'
-                            }`}
+                            className={`hidden sm:flex p-2 rounded-xl transition items-center gap-1 text-xs font-medium ${isMetronomeOpen
+                                ? 'bg-[var(--color-primary)] text-white shadow-sm'
+                                : 'hover:bg-[var(--color-border)] text-app'
+                                }`}
                             title={isMetronomeOpen ? "Detener metrónomo" : "Iniciar metrónomo"}
                         >
                             <Radio className={`w-4 h-4 ${isMetronomeOpen ? 'text-white animate-pulse' : 'text-[var(--color-primary)]'}`} />
                             <span>Metrónomo</span>
                         </button>
 
-                        {/* Cejilla / Capo */}
-                        <button
-                            onClick={() => setIsCapoOpen(true)}
-                            className="p-2 rounded-xl hover:bg-[var(--color-border)] text-app transition flex items-center gap-1 text-xs font-medium"
-                            title="Calculador de cejilla / capo"
-                        >
-                            <Scissors className="w-4 h-4 text-amber-500" />
-                            <span>Capo</span>
-                        </button>
 
-                        {/* Ajustes de lectura */}
+                        {/* Ajustes: visible como botón en sm+ */}
                         <button
                             onClick={() => setIsSettingsOpen(true)}
-                            className="p-2 rounded-xl hover:bg-[var(--color-border)] text-app transition flex items-center gap-1 text-xs font-medium"
-                            title="Ajustes de visualización (color, modo letra, 2 columnas, imprimir)"
+                            className="hidden sm:flex p-2 rounded-xl hover:bg-[var(--color-border)] text-app transition items-center gap-1 text-xs font-medium"
+                            title="Ajustes de visualización"
                         >
                             <SlidersHorizontal className="w-4 h-4" />
                             <span>Ajustes</span>
                         </button>
-                    </div>
 
-                    {/* EN MODO CELULAR: Las opciones de auto-scroll, metrónomo, capo y ajustes
-                        SOLO se muestran dentro de los tres puntitos verticales */}
-                    <div className="relative sm:hidden flex items-center">
-                        <button
-                            onClick={() => setShowMobileToolbarMenu(m => !m)}
-                            className={`p-2 rounded-xl border border-[var(--color-border)] text-app transition ${
-                                showMobileToolbarMenu || showAutoScroll || isMetronomeOpen
+                        {/* Tres puntos: siempre visible, pegado a los botones anteriores */}
+                        <div className="relative flex items-center">
+                            <button
+                                onClick={() => setShowMobileToolbarMenu(m => !m)}
+                                className={`p-2 rounded-xl border border-[var(--color-border)] text-app transition ${showMobileToolbarMenu
                                     ? 'bg-[var(--color-primary)]/15 border-[var(--color-primary)] text-[var(--color-primary)]'
                                     : 'hover:bg-[var(--color-border)]'
-                            }`}
-                            aria-label="Más opciones"
-                            aria-expanded={showMobileToolbarMenu}
-                            title="Más opciones"
-                        >
-                            <MoreVertical className="w-4 h-4" />
-                        </button>
+                                    }`}
+                                aria-label="Más opciones"
+                                aria-expanded={showMobileToolbarMenu}
+                                title="Más opciones"
+                            >
+                                <MoreVertical className="w-4 h-4" />
+                            </button>
 
-                        {showMobileToolbarMenu && (
-                            <>
-                                <div
-                                    className="fixed inset-0 z-40 bg-black/20"
-                                    onClick={() => setShowMobileToolbarMenu(false)}
-                                />
-                                <div className="absolute right-0 top-full mt-2 w-56 overflow-hidden rounded-2xl app-card shadow-2xl border border-[var(--color-border)] divide-y divide-[var(--color-border)] z-50">
-                                    <div className="p-1">
-                                        {/* Auto-Scroll */}
-                                        <button
-                                            onClick={() => {
-                                                setShowAutoScroll(s => !s);
-                                                setShowMobileToolbarMenu(false);
-                                            }}
-                                            className={`flex w-full items-center justify-between px-3 py-2.5 text-left text-xs font-medium rounded-xl transition ${
-                                                showAutoScroll
+                            {showMobileToolbarMenu && (
+                                <>
+                                    <div
+                                        className="fixed inset-0 z-40 bg-black/20"
+                                        onClick={() => setShowMobileToolbarMenu(false)}
+                                    />
+                                    <div className="absolute right-0 top-full mt-2 w-56 overflow-hidden rounded-2xl app-card shadow-2xl border border-[var(--color-border)] divide-y divide-[var(--color-border)] z-50">
+                                        {/* Sección de herramientas: solo se muestran en el dropdown cuando NO son visibles como botones (< sm) */}
+                                        <div className="p-1 sm:hidden">
+                                            {/* Auto-Scroll (solo mobile) */}
+                                            <button
+                                                onClick={() => {
+                                                    setShowAutoScroll(s => !s);
+                                                    setShowMobileToolbarMenu(false);
+                                                }}
+                                                className={`flex w-full items-center justify-between px-3 py-2.5 text-left text-xs font-medium rounded-xl transition ${showAutoScroll
                                                     ? 'bg-[var(--color-primary)]/15 text-[var(--color-primary)] font-bold'
                                                     : 'text-app hover:bg-[var(--color-border)]'
-                                            }`}
-                                        >
-                                            <span className="flex items-center gap-2">
-                                                <ArrowDown className="w-4 h-4 text-[var(--color-primary)]" />
-                                                Auto-Scroll
-                                            </span>
-                                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--color-border)] font-mono">
-                                                {showAutoScroll ? 'On' : 'Off'}
-                                            </span>
-                                        </button>
+                                                    }`}
+                                            >
+                                                <span className="flex items-center gap-2">
+                                                    <ArrowDown className="w-4 h-4 text-[var(--color-primary)]" />
+                                                    Auto-Scroll
+                                                </span>
+                                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--color-border)] font-mono">
+                                                    {showAutoScroll ? 'On' : 'Off'}
+                                                </span>
+                                            </button>
 
-                                        {/* Metrónomo */}
-                                        <button
-                                            onClick={() => {
-                                                setIsMetronomeOpen(m => !m);
-                                                setShowMobileToolbarMenu(false);
-                                            }}
-                                            className={`flex w-full items-center justify-between px-3 py-2.5 text-left text-xs font-medium rounded-xl transition ${
-                                                isMetronomeOpen
+                                            {/* Metrónomo (solo mobile) */}
+                                            <button
+                                                onClick={() => {
+                                                    setIsMetronomeOpen(m => !m);
+                                                    setShowMobileToolbarMenu(false);
+                                                }}
+                                                className={`flex w-full items-center justify-between px-3 py-2.5 text-left text-xs font-medium rounded-xl transition ${isMetronomeOpen
                                                     ? 'bg-[var(--color-primary)]/15 text-[var(--color-primary)] font-bold'
                                                     : 'text-app hover:bg-[var(--color-border)]'
-                                            }`}
-                                        >
-                                            <span className="flex items-center gap-2">
-                                                <Radio className={`w-4 h-4 ${isMetronomeOpen ? 'text-[var(--color-primary)] animate-pulse' : 'text-purple-500'}`} />
-                                                Metrónomo
-                                            </span>
-                                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--color-border)] font-mono">
-                                                {isMetronomeOpen ? 'Sonando' : 'Off'}
-                                            </span>
-                                        </button>
+                                                    }`}
+                                            >
+                                                <span className="flex items-center gap-2">
+                                                    <Radio className={`w-4 h-4 ${isMetronomeOpen ? 'text-[var(--color-primary)] animate-pulse' : 'text-purple-500'}`} />
+                                                    Metrónomo
+                                                </span>
+                                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--color-border)] font-mono">
+                                                    {isMetronomeOpen ? 'Sonando' : 'Off'}
+                                                </span>
+                                            </button>
 
-                                        {/* Capo */}
-                                        <button
-                                            onClick={() => {
-                                                setIsCapoOpen(true);
-                                                setShowMobileToolbarMenu(false);
-                                            }}
-                                            className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-medium text-app hover:bg-[var(--color-border)] rounded-xl transition"
-                                        >
-                                            <Scissors className="w-4 h-4 text-amber-500" />
-                                            Cejilla / Capo
-                                        </button>
 
-                                        {/* Ajustes */}
-                                        <button
-                                            onClick={() => {
-                                                setIsSettingsOpen(true);
-                                                setShowMobileToolbarMenu(false);
-                                            }}
-                                            className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-medium text-app hover:bg-[var(--color-border)] rounded-xl transition"
-                                        >
-                                            <SlidersHorizontal className="w-4 h-4 text-[var(--color-primary)]" />
-                                            Ajustes del visor
-                                        </button>
-                                    </div>
+                                            {/* Ajustes (solo mobile) */}
+                                            <button
+                                                onClick={() => {
+                                                    setIsSettingsOpen(true);
+                                                    setShowMobileToolbarMenu(false);
+                                                }}
+                                                className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-medium text-app hover:bg-[var(--color-border)] rounded-xl transition"
+                                            >
+                                                <SlidersHorizontal className="w-4 h-4 text-[var(--color-primary)]" />
+                                                Ajustes del visor
+                                            </button>
+                                        </div>
 
-                                    {(canCreateContent(currentUser) || song.videoUrl || canManageSong) && (
+                                        {/* Exportar PDF: siempre en el dropdown */}
                                         <div className="p-1">
-                                            {canCreateContent(currentUser) && (
-                                                <button
-                                                    onClick={() => {
-                                                        setShowMobileToolbarMenu(false);
-                                                        setIsEditingChordPositions(true);
-                                                    }}
-                                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-app hover:bg-[var(--color-border)] rounded-lg transition"
-                                                >
-                                                    Ajustar posición de notas
-                                                </button>
-                                            )}
-                                            {song.videoUrl && (
-                                                <button
-                                                    onClick={() => {
-                                                        setShowMobileToolbarMenu(false);
-                                                        window.open(song.videoUrl, '_blank');
-                                                    }}
-                                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-[var(--color-primary)] hover:bg-[var(--color-border)] rounded-lg transition"
-                                                >
-                                                    <Video className="w-4 h-4" /> Video de referencia
-                                                </button>
-                                            )}
-                                            {canManageSong && (
-                                                <>
+                                            <button
+                                                onClick={() => {
+                                                    setShowMobileToolbarMenu(false);
+                                                    handlePrintPdf();
+                                                }}
+                                                className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-medium text-app hover:bg-[var(--color-border)] rounded-xl transition"
+                                            >
+                                                <FileDown className="w-4 h-4 text-emerald-500" />
+                                                Exportar PDF
+                                            </button>
+                                        </div>
+
+                                        {/* Gestión de canción: siempre en el dropdown */}
+                                        {(canCreateContent(currentUser) || song.videoUrl || canManageSong) && (
+                                            <div className="p-1">
+                                                {canCreateContent(currentUser) && (
                                                     <button
                                                         onClick={() => {
                                                             setShowMobileToolbarMenu(false);
-                                                            router.push(`/canciones/${song.id}/editar`);
+                                                            setIsEditingChordPositions(true);
                                                         }}
                                                         className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-app hover:bg-[var(--color-border)] rounded-lg transition"
                                                     >
-                                                        <Edit className="w-4 h-4" /> Editar canción
+                                                        <MoveHorizontal className="w-4 h-4 text-cyan-500" />
+                                                        <span>Ajustar posición de notas</span>
                                                     </button>
+                                                )}
+                                                {song.videoUrl && (
                                                     <button
                                                         onClick={() => {
                                                             setShowMobileToolbarMenu(false);
-                                                            handleDelete();
+                                                            window.open(song.videoUrl, '_blank');
                                                         }}
-                                                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg transition"
+                                                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-[var(--color-primary)] hover:bg-[var(--color-border)] rounded-lg transition"
                                                     >
-                                                        <Trash2 className="w-4 h-4" /> Eliminar canción
+                                                        <Video className="w-4 h-4" /> Ver video de referencia
                                                     </button>
-                                                </>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
-                            </>
-                        )}
+                                                )}
+                                                {canManageSong && (
+                                                    <>
+                                                        <button
+                                                            onClick={() => {
+                                                                setShowMobileToolbarMenu(false);
+                                                                router.push(`/canciones/${song.id}/editar`);
+                                                            }}
+                                                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-app hover:bg-[var(--color-border)] rounded-lg transition"
+                                                        >
+                                                            <Edit className="w-4 h-4" /> Editar canción
+                                                        </button>
+                                                        <button
+                                                            onClick={() => {
+                                                                setShowMobileToolbarMenu(false);
+                                                                handleDelete();
+                                                            }}
+                                                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg transition"
+                                                        >
+                                                            <Trash2 className="w-4 h-4" /> Eliminar canción
+                                                        </button>
+                                                    </>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                </>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -710,12 +709,12 @@ export default function SongDetailPage() {
             {/* Contenido de la canción */}
             <div className="max-w-6xl mx-auto px-4 sm:px-8 py-3 pb-36">
                 {/* Hoja de letra y acordes */}
-                <div className={`overflow-x-auto ${columns === 2 ? 'md:columns-2 md:gap-12 md:divide-x md:divide-[var(--color-border)]/40' : ''}`}>
-                    <div className={`whitespace-pre font-mono ${fontSizeClass} text-app leading-relaxed`}>
+                <div className={`overflow-x-hidden ${columns === 2 ? 'md:columns-2 md:gap-12 md:divide-x md:divide-[var(--color-border)]/40' : ''}`}>
+                    <div className={`whitespace-pre-wrap break-words font-mono ${fontSizeClass} text-app leading-relaxed`}>
                         {transposedContent.split('\n').map((line: string, i: number) => {
                             const parts = line.split(/(\[[^\]]+\])/g);
                             return (
-                                <div key={i} className="leading-relaxed hover:bg-[var(--color-border)]/10 rounded px-1 -mx-1 transition-colors">
+                                <div key={i} className="leading-relaxed hover:bg-[var(--color-border)]/10 rounded px-1 transition-colors">
                                     {parts.map((part: string, j: number) => {
                                         if (part.startsWith('[') && part.endsWith(']')) {
                                             if (hideChords) return null; // Modo solo letra
@@ -735,11 +734,10 @@ export default function SongDetailPage() {
                                                         setChordOffsets(current => ({ ...current, [chordKey]: Math.round(dragStart.offset + event.clientX - dragStart.clientX) }));
                                                     }}
                                                     onPointerUp={() => setDragStart(null)}
-                                                    className={`inline-block text-left ${chordColorClass} font-bold focus:outline-none print-chord ${
-                                                        isEditingChordPositions
-                                                            ? 'cursor-grab active:cursor-grabbing rounded bg-[var(--color-primary)]/10 px-0.5'
-                                                            : 'cursor-pointer hover:underline'
-                                                    }`}
+                                                    className={`inline-block text-left ${chordColorClass} font-bold focus:outline-none print-chord ${isEditingChordPositions
+                                                        ? 'cursor-grab active:cursor-grabbing rounded bg-[var(--color-primary)]/10 px-0.5'
+                                                        : 'cursor-pointer hover:underline'
+                                                        }`}
                                                     style={{ transform: `translateX(${chordOffsets[chordKey] || 0}px)` }}
                                                     title={`Ver acorde ${fullChord}`}
                                                 >
@@ -768,7 +766,7 @@ export default function SongDetailPage() {
 
             {/* Controles flotantes a la derecha (Performance Dock) */}
             <div
-                className={`fixed right-3 sm:right-6 bottom-20 sm:bottom-8 flex flex-col items-center gap-2 transition-all duration-300 ${controlsOpacity} z-40 print:hidden`}
+                className={`fixed right-6 sm:right-6 bottom-15 sm:bottom-8 flex flex-col items-center gap-2 transition-all duration-300 ${controlsOpacity} z-40 print:hidden`}
                 onMouseEnter={handleMouseEnter}
                 onMouseLeave={handleMouseLeave}
             >
@@ -852,121 +850,21 @@ export default function SongDetailPage() {
                     </span>
                 </button>
 
-                {/* Menú de más opciones */}
-                <div className="relative flex flex-col items-center gap-0.5">
-                    <button
-                        onClick={() => setShowSongMenu(prev => !prev)}
-                        className="p-2 rounded-full app-glass shadow-lg text-app-muted hover:text-[var(--color-primary)] transition"
-                        aria-label="Más acciones"
-                        aria-expanded={showSongMenu}
-                    >
-                        <MoreVertical className="w-4 h-4" />
-                    </button>
-                    <span className="text-[9px] text-app-muted">Más</span>
+                {/* Distribución de Columnas (1 o 2 columnas) */}
+                <button
+                    onClick={() => setColumns(c => c === 1 ? 2 : 1)}
+                    className="flex flex-col items-center gap-0.5 group"
+                    title={columns === 2 ? 'Cambiar a 1 columna' : 'Cambiar a 2 columnas'}
+                    aria-label="Distribución en columnas"
+                >
+                    <div className={`p-2 rounded-full app-glass shadow-lg transition ${columns === 2 ? 'bg-[var(--color-primary)] text-white shadow-[var(--color-primary)]/20' : 'text-app-muted group-hover:text-[var(--color-primary)]'}`}>
+                        <Columns className="w-4 h-4" />
+                    </div>
+                    <span className={`text-[9px] ${columns === 2 ? 'text-[var(--color-primary)] font-bold' : 'text-app-muted'}`}>
+                        {columns === 2 ? '2 Col' : '1 Col'}
+                    </span>
+                </button>
 
-                    {showSongMenu && (
-                        <>
-                            <div className="fixed inset-0 z-40 bg-black/10" onClick={() => setShowSongMenu(false)} />
-                            <div className="absolute right-12 bottom-0 w-56 overflow-hidden rounded-xl app-card shadow-2xl border border-[var(--color-border)] divide-y divide-[var(--color-border)] z-50">
-                                <div className="p-1">
-                                    <button
-                                        onClick={() => {
-                                            setShowSongMenu(false);
-                                            setShowAutoScroll(s => !s);
-                                        }}
-                                        className="flex w-full items-center justify-between px-3 py-2 text-left text-xs font-medium text-app hover:bg-[var(--color-border)] rounded-lg transition"
-                                    >
-                                        <span className="flex items-center gap-2">
-                                            <ArrowDown className="w-4 h-4 text-[var(--color-primary)]" /> Auto-Scroll
-                                        </span>
-                                        <span className="text-[10px] text-app-muted font-mono">{showAutoScroll ? 'On' : 'Off'}</span>
-                                    </button>
-                                    <button
-                                        onClick={() => {
-                                            setShowSongMenu(false);
-                                            setIsMetronomeOpen(m => !m);
-                                        }}
-                                        className="flex w-full items-center justify-between px-3 py-2 text-left text-xs font-medium text-app hover:bg-[var(--color-border)] rounded-lg transition"
-                                    >
-                                        <span className="flex items-center gap-2">
-                                            <Radio className={`w-4 h-4 ${isMetronomeOpen ? 'text-[var(--color-primary)] animate-pulse' : 'text-purple-500'}`} /> Metrónomo
-                                        </span>
-                                        <span className="text-[10px] text-app-muted font-mono">{isMetronomeOpen ? 'Sonando' : 'Off'}</span>
-                                    </button>
-                                    <button
-                                        onClick={() => {
-                                            setShowSongMenu(false);
-                                            setIsCapoOpen(true);
-                                        }}
-                                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-app hover:bg-[var(--color-border)] rounded-lg transition"
-                                    >
-                                        <Scissors className="w-4 h-4 text-amber-500" /> Cejilla / Capo
-                                    </button>
-                                    <button
-                                        onClick={() => {
-                                            setShowSongMenu(false);
-                                            setIsSettingsOpen(true);
-                                        }}
-                                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-app hover:bg-[var(--color-border)] rounded-lg transition"
-                                    >
-                                        <SlidersHorizontal className="w-4 h-4 text-[var(--color-primary)]" /> Ajustes del visor
-                                    </button>
-                                </div>
-
-                            {canCreateContent(currentUser) && (
-                                <div className="p-1">
-                                    <button
-                                        onClick={() => {
-                                            setShowSongMenu(false);
-                                            setIsEditingChordPositions(true);
-                                        }}
-                                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-app hover:bg-[var(--color-border)] rounded-lg transition"
-                                    >
-                                        Ajustar posición de notas
-                                    </button>
-                                </div>
-                            )}
-
-                            {song.videoUrl && (
-                                <div className="p-1">
-                                    <button
-                                        onClick={() => {
-                                            setShowSongMenu(false);
-                                            window.open(song.videoUrl, '_blank');
-                                        }}
-                                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-[var(--color-primary)] hover:bg-[var(--color-border)] rounded-lg transition"
-                                    >
-                                        <Video className="w-4 h-4" /> Ver video de referencia
-                                    </button>
-                                </div>
-                            )}
-
-                            {canManageSong && (
-                                <div className="p-1">
-                                    <button
-                                        onClick={() => {
-                                            setShowSongMenu(false);
-                                            router.push(`/canciones/${song.id}/editar`);
-                                        }}
-                                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-app hover:bg-[var(--color-border)] rounded-lg transition"
-                                    >
-                                        <Edit className="w-4 h-4" /> Editar canción
-                                    </button>
-                                    <button
-                                        onClick={() => {
-                                            setShowSongMenu(false);
-                                            handleDelete();
-                                        }}
-                                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg transition"
-                                    >
-                                        <Trash2 className="w-4 h-4" /> Eliminar canción
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    </>
-                )}
-                </div>
             </div>
 
             {/* Modal para Agregar a Setlist */}
@@ -1003,13 +901,6 @@ export default function SongDetailPage() {
                 autoPlayOnOpen={true}
             />
 
-            {/* Modal Cejilla / Capo */}
-            <CapoCalculatorModal
-                isOpen={isCapoOpen}
-                onClose={() => setIsCapoOpen(false)}
-                currentKey={currentTransposedKey || song.key || 'C'}
-                onApplyTransposition={(delta) => setTranspose(t => t + delta)}
-            />
 
             {/* Modal Ajustes del Visor */}
             <SongSettingsModal
@@ -1021,6 +912,7 @@ export default function SongDetailPage() {
                 onColumnsChange={setColumns}
                 chordColor={chordColor}
                 onChordColorChange={setChordColor}
+                onPrint={handlePrintPdf}
             />
         </div>
     );

@@ -9,18 +9,28 @@ interface AutoScrollControllerProps {
     onClose?: () => void;
 }
 
+const SPEEDS = [0.25, 0.5, 0.75, 1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10];
+
+const getPixelsPerSecond = (spd: number) => {
+    if (spd <= 1) {
+        return Math.max(3.5, spd * 16);
+    }
+    return 16 + Math.pow(spd - 1, 1.45) * 20;
+};
+
 export function AutoScrollController({
     scrollContainerId = 'main-scroll-container',
     onToggleActive,
     onClose
 }: AutoScrollControllerProps) {
     const [isScrolling, setIsScrolling] = useState(false);
-    const [speed, setSpeed] = useState(3); // 1 to 10
+    const [speedIndex, setSpeedIndex] = useState(3); // 1x por defecto (SPEEDS[3] = 1)
+    const currentSpeed = SPEEDS[speedIndex];
     const [isCollapsed, setIsCollapsed] = useState(false);
     const [progress, setProgress] = useState(0);
 
     const isScrollingRef = useRef(isScrolling);
-    const speedRef = useRef(speed);
+    const speedRef = useRef(currentSpeed);
     const animFrameIdRef = useRef<number | null>(null);
     const lastTimeRef = useRef<number | null>(null);
     const accumulatedScrollRef = useRef<number>(0);
@@ -32,8 +42,8 @@ export function AutoScrollController({
     }, [isScrolling]);
 
     useEffect(() => {
-        speedRef.current = speed;
-    }, [speed]);
+        speedRef.current = currentSpeed;
+    }, [currentSpeed]);
 
     // Obtener elemento de scroll real con detección inteligente
     const getContainer = useCallback((): HTMLElement | null => {
@@ -104,12 +114,8 @@ export function AutoScrollController({
 
         const container = getContainer();
         if (container) {
-            // Escala de velocidad optimizada para lectura musical:
-            // 1: ~18px/s (baladas muy lentas)
-            // 3: ~50px/s (ritmo moderado estándar)
-            // 5: ~95px/s (ritmo vivo)
-            // 10: ~250px/s (muy rápido)
-            const pixelsPerSecond = 14 + Math.pow(speedRef.current, 1.55) * 5.2;
+            // Escala de velocidad con soporte para lecturas muy lentas (desde 0.25x / ~4px/s)
+            const pixelsPerSecond = getPixelsPerSecond(speedRef.current);
             const scrollDelta = (pixelsPerSecond * delta) / 1000;
 
             const maxScroll = container.scrollHeight - container.clientHeight;
@@ -247,7 +253,7 @@ export function AutoScrollController({
     }, [isScrolling]);
 
     return (
-        <div className="fixed bottom-16 sm:bottom-6 left-1/2 -translate-x-1/2 z-40 transition-all duration-300 pointer-events-auto">
+        <div className="fixed bottom-16 sm:bottom-6 left-1/2 -translate-x-1/2 z-40 transition-all duration-300 pointer-events-auto max-w-[calc(100vw-1rem)]">
             <div className="app-glass border border-[var(--color-border)] rounded-2xl shadow-2xl p-2 sm:p-2.5 flex items-center gap-1.5 sm:gap-2 text-app backdrop-blur-xl">
                 {/* Botón Minimizar / Expandir */}
                 <button
@@ -286,20 +292,20 @@ export function AutoScrollController({
                         {/* Control de Velocidad */}
                         <div className="flex items-center gap-1 sm:gap-1.5 pl-1 pr-1 sm:pr-2 border-l border-[var(--color-border)]">
                             <button
-                                onClick={() => setSpeed(s => Math.max(1, s - 1))}
-                                disabled={speed <= 1}
+                                onClick={() => setSpeedIndex(idx => Math.max(0, idx - 1))}
+                                disabled={speedIndex <= 0}
                                 className="w-6 h-6 rounded flex items-center justify-center text-xs font-bold bg-[var(--color-border)] hover:bg-[var(--color-border)]/80 disabled:opacity-40 transition"
                                 title="Más lento"
                             >
                                 -
                             </button>
-                            <span className="font-mono text-xs font-bold w-9 sm:w-11 text-center text-app flex items-center justify-center gap-0.5">
+                            <span className="font-mono text-xs font-bold w-12 sm:w-14 text-center text-app flex items-center justify-center gap-0.5" title="Velocidad de desplazamiento">
                                 <Gauge className="w-3 h-3 text-[var(--color-primary)] hidden sm:inline" />
-                                {speed}x
+                                {currentSpeed}x
                             </span>
                             <button
-                                onClick={() => setSpeed(s => Math.min(10, s + 1))}
-                                disabled={speed >= 10}
+                                onClick={() => setSpeedIndex(idx => Math.min(SPEEDS.length - 1, idx + 1))}
+                                disabled={speedIndex >= SPEEDS.length - 1}
                                 className="w-6 h-6 rounded flex items-center justify-center text-xs font-bold bg-[var(--color-border)] hover:bg-[var(--color-border)]/80 disabled:opacity-40 transition"
                                 title="Más rápido"
                             >

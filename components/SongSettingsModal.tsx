@@ -23,6 +23,7 @@ interface SongSettingsModalProps {
     onColumnsChange: (cols: 1 | 2) => void;
     chordColor: string;
     onChordColorChange: (colorId: string) => void;
+    onPrint?: () => void;
 }
 
 export function SongSettingsModal({
@@ -34,6 +35,7 @@ export function SongSettingsModal({
     onColumnsChange,
     chordColor,
     onChordColorChange,
+    onPrint,
 }: SongSettingsModalProps) {
     const { notation, setNotation } = useChordNotation();
     const [wakeLockActive, setWakeLockActive] = useState(false);
@@ -68,9 +70,11 @@ export function SongSettingsModal({
 
     const handlePrint = () => {
         onClose();
-        setTimeout(() => {
-            window.print();
-        }, 200);
+        if (onPrint) {
+            setTimeout(() => onPrint(), 200);
+        } else {
+            setTimeout(() => window.print(), 200);
+        }
     };
 
     if (!isOpen) return null;

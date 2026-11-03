@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Play, Square, Plus, Minus, Volume2, VolumeX, X, Radio, Minimize2, Maximize2 } from 'lucide-react';
+import { Play, Square, Plus, Minus, Volume2, VolumeX, X, Radio, Minimize2, Maximize2, GripVertical } from 'lucide-react';
 
 interface MetronomeProps {
     isOpen: boolean;
@@ -23,7 +23,11 @@ export function Metronome({
     const [beatsPerBar, setBeatsPerBar] = useState(4);
     const [currentBeat, setCurrentBeat] = useState(0);
     const [isMuted, setIsMuted] = useState(false);
-    const [isMinimized, setIsMinimized] = useState(false);
+    const [isMinimized, setIsMinimized] = useState(true);
+    const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
+
+    const containerRef = useRef<HTMLDivElement>(null);
+    const dragRef = useRef<{ startX: number; startY: number; initialX: number; initialY: number } | null>(null);
 
     // Audio context refs
     const audioContextRef = useRef<AudioContext | null>(null);
@@ -132,14 +136,91 @@ export function Metronome({
         }
     };
 
-    // Al abrir el componente, sonar inmediatamente el tempo preconfigurado
+    // Al abrir el componente, asegurar aspecto contraído y sonar de inmediato
     useEffect(() => {
-        if (isOpen && autoPlayOnOpen && !isPlayingRef.current) {
-            startMetronome();
+        if (isOpen) {
+            setIsMinimized(true);
+            if (autoPlayOnOpen && !isPlayingRef.current) {
+                startMetronome();
+            }
         } else if (!isOpen && isPlayingRef.current) {
             stopMetronome();
         }
     }, [isOpen, autoPlayOnOpen, startMetronome, stopMetronome]);
+
+    // Inicializar posición por defecto en la parte superior derecha
+    useEffect(() => {
+        if (typeof window !== 'undefined' && position === null) {
+            const defaultX = Math.max(10, window.innerWidth - 270);
+            const defaultY = 75;
+            setPosition({ x: defaultX, y: defaultY });
+        }
+    }, [position]);
+
+    // Ajustar si la ventana cambia de tamaño o al alternar modo minimizado/expandido
+    useEffect(() => {
+        if (position && typeof window !== 'undefined') {
+            const width = isMinimized ? 260 : 340;
+            const height = isMinimized ? 50 : 300;
+            const maxX = Math.max(10, window.innerWidth - width - 10);
+            const maxY = Math.max(10, window.innerHeight - height - 10);
+            if (position.x > maxX || position.y > maxY) {
+                setPosition(prev => prev ? {
+                    x: Math.min(maxX, Math.max(10, prev.x)),
+                    y: Math.min(maxY, Math.max(10, prev.y))
+                } : null);
+            }
+        }
+    }, [isMinimized]);
+
+    // Controladores de arrastre por pantalla
+    const handlePointerDown = (e: React.PointerEvent) => {
+        const target = e.target as HTMLElement;
+        if (target.closest('button, input, [role="button"], input[type="range"]')) {
+            return;
+        }
+
+        e.preventDefault();
+        const currentX = position ? position.x : (window.innerWidth - (isMinimized ? 260 : 340));
+        const currentY = position ? position.y : 75;
+
+        dragRef.current = {
+            startX: e.clientX,
+            startY: e.clientY,
+            initialX: currentX,
+            initialY: currentY,
+        };
+
+        try {
+            (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+        } catch {}
+    };
+
+    const handlePointerMove = (e: React.PointerEvent) => {
+        if (!dragRef.current) return;
+        const deltaX = e.clientX - dragRef.current.startX;
+        const deltaY = e.clientY - dragRef.current.startY;
+
+        const width = containerRef.current?.offsetWidth || (isMinimized ? 240 : 320);
+        const height = containerRef.current?.offsetHeight || (isMinimized ? 50 : 280);
+
+        const maxX = Math.max(10, window.innerWidth - width - 10);
+        const maxY = Math.max(10, window.innerHeight - height - 10);
+
+        const newX = Math.max(10, Math.min(maxX, dragRef.current.initialX + deltaX));
+        const newY = Math.max(10, Math.min(maxY, dragRef.current.initialY + deltaY));
+
+        setPosition({ x: newX, y: newY });
+    };
+
+    const handlePointerUp = (e: React.PointerEvent) => {
+        if (dragRef.current) {
+            dragRef.current = null;
+            try {
+                (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+            } catch {}
+        }
+    };
 
     useEffect(() => {
         if (isPlaying) {
@@ -185,11 +266,24 @@ export function Metronome({
 
     if (!isOpen) return null;
 
-    // Vista compacta / minimizada (Píldora flotante para máxima visibilidad de la canción)
+    // Vista compacta / minimizada (Píldora flotante desplazable por toda la pantalla)
     if (isMinimized) {
         return (
-            <div className="fixed top-20 right-4 z-40 animate-in fade-in slide-in-from-top-2 pointer-events-auto print:hidden">
-                <div className="app-glass border border-[var(--color-border)] rounded-full shadow-2xl p-1.5 px-3 flex items-center gap-2 text-app backdrop-blur-xl">
+            <div
+                ref={containerRef}
+                onPointerDown={handlePointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                onPointerCancel={handlePointerUp}
+                style={position ? { left: `${position.x}px`, top: `${position.y}px` } : { right: '16px', top: '75px' }}
+                className="fixed z-40 animate-in fade-in slide-in-from-top-2 pointer-events-auto print:hidden cursor-grab active:cursor-grabbing select-none touch-none"
+            >
+                <div className="app-glass border border-[var(--color-border)] rounded-full shadow-2xl p-1.5 px-2.5 flex items-center gap-1.5 sm:gap-2 text-app backdrop-blur-xl">
+                    {/* Agarradera de arrastre */}
+                    <div className="text-app-muted hover:text-app p-0.5 cursor-grab active:cursor-grabbing" title="Arrastrar para mover">
+                        <GripVertical className="w-3.5 h-3.5" />
+                    </div>
+
                     <button
                         onClick={togglePlay}
                         className={`w-7 h-7 rounded-full flex items-center justify-center transition ${
@@ -246,13 +340,22 @@ export function Metronome({
         );
     }
 
-    // Modal Flotante NO Bloqueante (la canción permanece 100% visible y legible detrás)
+    // Modal Flotante Desplazable por toda la pantalla
     return (
-        <div className="fixed top-16 sm:top-20 right-2 sm:right-6 z-40 max-w-[340px] w-[calc(100vw-1rem)] sm:w-80 pointer-events-auto animate-in fade-in slide-in-from-top-3 print:hidden shadow-2xl">
+        <div
+            ref={containerRef}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+            style={position ? { left: `${position.x}px`, top: `${position.y}px` } : { right: '16px', top: '75px' }}
+            className="fixed z-40 max-w-[340px] w-[calc(100vw-1rem)] sm:w-80 pointer-events-auto animate-in fade-in slide-in-from-top-3 print:hidden shadow-2xl select-none touch-none"
+        >
             <div className="app-card border border-[var(--color-border)] rounded-2xl shadow-2xl p-3.5 text-app backdrop-blur-xl bg-app-surface/95">
-                {/* Header no bloqueante con controles */}
-                <div className="flex items-center justify-between pb-2 border-b border-[var(--color-border)] mb-2.5">
+                {/* Header no bloqueante con controles y zona de arrastre */}
+                <div className="flex items-center justify-between pb-2 border-b border-[var(--color-border)] mb-2.5 cursor-grab active:cursor-grabbing" title="Arrastrar para mover">
                     <div className="flex items-center gap-1.5">
+                        <GripVertical className="w-4 h-4 text-app-muted" />
                         <div className={`p-1.5 rounded-lg ${isPlaying ? 'bg-[var(--color-primary)]/20 text-[var(--color-primary)]' : 'bg-[var(--color-border)] text-app-muted'}`}>
                             <Radio className={`w-4 h-4 ${isPlaying ? 'animate-pulse' : ''}`} />
                         </div>

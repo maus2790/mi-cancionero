@@ -294,28 +294,48 @@
 }
 
 /* =========================================================
-   ESTILOS DE IMPRESIÓN (PRINT & PDF)
+   ESTILOS DE IMPRESION (PRINT & PDF)
    ========================================================= */
 
 @media print {
+  html,
   body {
+    height: auto !important;
+    min-height: 100% !important;
+    max-height: none !important;
+    overflow: visible !important;
     background: white !important;
     color: black !important;
+    position: static !important;
+  }
+
+  /* Eliminar cualquier recorte de altura o scroll de contenedores intermedios */
+  body * {
+    overflow: visible !important;
   }
 
   header,
   aside,
   nav,
-  button,
   .app-glass,
   #bottom-nav {
+    display: none !important;
+  }
+
+  /* Ocultar todos los botones EXCEPTO los acordes (.print-chord) */
+  button:not(.print-chord) {
     display: none !important;
   }
 
   #main-scroll-container {
     margin: 0 !important;
     padding: 0 !important;
+    height: auto !important;
+    min-height: auto !important;
+    max-height: none !important;
     overflow: visible !important;
+    position: static !important;
+    display: block !important;
   }
 
   .print-readable {
@@ -323,13 +343,35 @@
     background: transparent !important;
   }
 
+  /* Acordes: se muestran como texto inline sin apariencia de boton */
   .print-chord {
+    display: inline !important;
     color: #0284c7 !important;
     font-weight: bold !important;
+    background: none !important;
+    border: none !important;
+    padding: 0 !important;
+    cursor: default !important;
+    text-decoration: none !important;
+    box-shadow: none !important;
+    outline: none !important;
+    -webkit-appearance: none !important;
+    appearance: none !important;
+  }
+
+  /* Reglas de salto de página para separar canciones */
+  .break-after-page {
+    break-after: page !important;
+    page-break-after: always !important;
   }
 
   @page {
     margin: 1.5cm;
     size: auto;
   }
+}
+/* Ocultar barra de navegación inferior en modo pantalla completa */
+:fullscreen #bottom-nav,
+:-webkit-full-screen #bottom-nav {
+  display: none !important;
 }

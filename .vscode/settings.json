@@ -1,0 +1,17 @@
+{
+  // Desactiva el validador CSS nativo de VS Code para que no marque
+  // directivas de Tailwind v4 como @variant, @utility, @layer, etc.
+  "css.validate": false,
+  "scss.validate": false,
+  "less.validate": false,
+
+  // Asocia los archivos .css del proyecto a Tailwind para IntelliSense
+  "files.associations": {
+    "*.css": "tailwindcss"
+  },
+
+  // Si tienes la extensión Tailwind CSS IntelliSense, activa su validación
+  "tailwindCSS.validate": true,
+  "tailwindCSS.experimental.classRegex": []
+}
+
